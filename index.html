@@ -1541,6 +1541,10 @@ const SPRITES = {
   shield:  [".ohho.","ohbbho","ohbbho","ohbbho","ohbbho",".ohho.","..oo.."],
   // ---- enemies (recolored per hue/boss where noted) ----
   slime: ["...oooo...",".ohhhhhho.","ohhhhbbbbo","obbccccbbo","obebbbbebo","osbbbbbbso",".osssssso.","...oooo..."],
+  // brute: a squat, stubby-legged rock/moss golem - shares slime's top half almost verbatim
+  // (same taper, same eye row) but ends in two flat "feet" instead of one tapered point,
+  // reading as heavier and grounded rather than an ooze - appears from floor 3 onward
+  brute: ["...oooo...",".ohhhhhho.","ohhhhbbbbo","obbccccbbo","obebbbbebo","obbbbbbbbo",".obssssbo.",".oo...oo.."],
   batWingL: ["obbbb","ohhbb",".ohbb","..ob."],
   batWingR: ["bbbbo","bbhho","bbho.",".bo.."],
   batBody: [".o...o.","obo.obo","obbbbbo","obwbwbo","obbbbbo",".ossso."],
@@ -1938,6 +1942,13 @@ function slimeParts(hue){
     {x:-3.6,y:0,w:7.2,h:7.2,sprite:{grid:SPRITES.slime,palette:pal}, group:"body"},
   ];
 }
+function bruteParts(){
+  const t = tonesFrom("#7a8a6a");
+  const pal = {o:t.out, h:t.hi, b:t.base, c:"#c9d6b0", e:COL.ink, s:t.sh};
+  return [
+    {x:-4.4,y:0,w:8.8,h:8.4,sprite:{grid:SPRITES.brute,palette:pal}, group:"body"},
+  ];
+}
 
 function batParts(){
   const t = tonesFrom(COL.bat);
@@ -1960,6 +1971,21 @@ function ratParts(){
     {x:-3.6,y:1,w:7.2,h:4,sprite:{grid:SPRITES.ratBody,palette:pal}},
     {x:2.6,y:1.4,w:1.4,h:1.2,c:COL.ratDark, group:"legR"},
     {x:-3.2,y:1.4,w:1.4,h:1.2,c:COL.ratDark, group:"legL"},
+  ];
+}
+// boar: reuses the rat's proven body silhouette at a bigger scale with a browner palette and
+// a pair of small tusks - a fast ground charger that appears from floor 3 onward (see updateEnemy
+// loop's "boar" lunge burst)
+function boarParts(){
+  const t = tonesFrom("#8a6748");
+  const pal = {o:t.out, b:t.base, e:COL.ink, s:t.sh};
+  return [
+    {x:-1.3,y:-0.5,w:2.2,h:0.9,c:t.sh, group:"tail"},
+    {x:-4.6,y:1,w:9.2,h:5.2,sprite:{grid:SPRITES.ratBody,palette:pal}},
+    {x:3.2,y:1.6,w:1.8,h:1.6,c:t.sh, group:"legR"},
+    {x:-4.4,y:1.6,w:1.8,h:1.6,c:t.sh, group:"legL"},
+    {x:-4.6,y:2.4,w:0.9,h:0.6,c:"#f5f0e0", group:"tuskL"},
+    {x:3.7,y:2.4,w:0.9,h:0.6,c:"#f5f0e0", group:"tuskR"},
   ];
 }
 
@@ -2092,6 +2118,15 @@ function drawCreature(ctx, kind, ent, camx, camy){
       flash: ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)):0,
       alpha: ent.dying? Math.max(0,1-ent.dieT/0.4):1,
     });
+  } else if(kind==="brute"){
+    const sq = 1+Math.sin(walkPhase*0.7)*0.06; // heavier, barely squashes
+    squashX*=sq; squashY*=1/Math.max(0.9,sq);
+    groupOffset.body = {dy: Math.abs(Math.sin(walkPhase*0.7))*0.35};
+    drawParts(ctx, bruteParts(), sx, sy - Math.abs(Math.sin(walkPhase*0.7))*0.9, {
+      flip: ent.facing<0, groupOffset, sx:squashX*1.15, sy:squashY*1.15,
+      flash: ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)):0,
+      alpha: ent.dying? Math.max(0,1-ent.dieT/0.5):1,
+    });
   } else if(kind==="bat"){
     const flap = Math.sin(t*22);
     groupOffset.wingL = {dy: flap*1.4};
@@ -2108,6 +2143,16 @@ function drawCreature(ctx, kind, ent, camx, camy){
     drawParts(ctx, ratParts(), sx, sy - bob*0.15, {
       flip: ent.facing<0, groupOffset,
       flash: ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)):0,
+      alpha: ent.dying? Math.max(0,1-ent.dieT/0.4):1,
+    });
+  } else if(kind==="boar"){
+    const boarPhase = ent.lungeT>0 ? walkPhase*2.2 : walkPhase; // legs blur faster mid-lunge
+    groupOffset.tail = {dy: Math.sin(boarPhase*1.3)*0.5};
+    groupOffset.legL = {dy: moving? Math.max(0,Math.sin(boarPhase))*1.1:0};
+    groupOffset.legR = {dy: moving? Math.max(0,-Math.sin(boarPhase))*1.1:0};
+    drawParts(ctx, boarParts(), sx, sy - bob*0.15, {
+      flip: ent.facing<0, groupOffset,
+      flash: (ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)) : (ent.lungeT>0?0.25:0)),
       alpha: ent.dying? Math.max(0,1-ent.dieT/0.4):1,
     });
   } else if(kind==="ghost"){
@@ -2486,6 +2531,7 @@ function spawnFloor(){
     let types = ["slime","rat"];
     if(biomeFloor>=2) types.push("bat","wisp");
     if(biomeFloor>=3) types.push("ghost","ghost");
+    if(floorNum>=3) types.push("brute","boar"); // new from floor 3 onward, across every biome
     enemies.push(makeEnemy(choice(types), p.x, p.y));
   }
 
@@ -2579,6 +2625,11 @@ function makeEnemy(type,x,y,bossKind){
     bat:{hp:3+Math.floor(floorNum*0.4),dmg:dmgTier,speed:105,radius:10,contactCd:0.7},
     ghost:{hp:5+Math.floor(floorNum*0.5),dmg:dmgTier+1,speed:55,radius:12,contactCd:0.9,noclip:true},
     wisp:{hp:3+Math.floor(floorNum*0.3),dmg:dmgTier,speed:32,radius:9,contactCd:1.1,hue:biome.wispHue,rangedCd:rand(0.4,1.4)},
+    // brute: slow, tanky, hits hard - a stepping-stone "mini-tank" that rewards kiting.
+    // boar: fast ground charger that periodically bursts into a short high-speed lunge
+    // (see the enemy update loop). Both first appear on floor 3 and stick around after.
+    brute:{hp:6+Math.floor(floorNum*0.7),dmg:dmgTier+1,speed:32,radius:14,contactCd:1.0},
+    boar:{hp:3+Math.floor(floorNum*0.4),dmg:dmgTier,speed:72,radius:11,contactCd:0.7,lungeCd:rand(0.6,1.6),lungeT:0},
     boss: BOSSES[bossKind || "boss"],
   }[type];
   return Object.assign(base, stats, {maxhp:stats.hp, bossKind: type==="boss" ? (bossKind||"boss") : undefined});
@@ -3646,6 +3697,17 @@ function update(dt){
       updateWisp(en, dt, d2);
       continue;
     }
+    // boar: periodically bursts into a short high-speed lunge while chasing - a quick
+    // reaction check for the player rather than a constant flat speed boost
+    let speedMult = 1;
+    if(en.type==="boar"){
+      en.lungeCd -= dt;
+      if(en.lungeT>0) en.lungeT -= dt;
+      if(en.lungeT<=0 && en.lungeCd<=0 && d2<170*170 && d2>30*30){
+        en.lungeT = 0.35; en.lungeCd = rand(1.6,2.4);
+      }
+      if(en.lungeT>0) speedMult = 2.1;
+    }
 
     const senseR = en.type==="ghost"? 260 : 170;
     if(d2 < senseR*senseR){
@@ -3667,7 +3729,7 @@ function update(dt){
       if(Math.random()<0.985){ tx=en.wanderDir.x*0.5; ty=en.wanderDir.y*0.5; en.moving=true; }
     }
     const len = Math.hypot(tx,ty)||1;
-    moveWithCollision(en, (tx/len)*en.speed*dt, (ty/len)*en.speed*dt);
+    moveWithCollision(en, (tx/len)*en.speed*speedMult*dt, (ty/len)*en.speed*speedMult*dt);
     if(tx!==0) en.facing = tx>0?1:-1;
 
     // contact combat both ways
@@ -3993,7 +4055,7 @@ function hitEnemy(en, dmg, angle, knockback){
   if(en.hp<=0 && !en.dying){
     en.dying = true; en.dieT=0;
     Audio1.death();
-    const deathColor = en.type==="slime" ? COL.slime : en.type==="boss" ? BOSSES[en.bossKind].bodyColor : "#e6dcff";
+    const deathColor = en.type==="slime" ? COL.slime : en.type==="brute" ? "#9ab080" : en.type==="boar" ? "#8a6748" : en.type==="boss" ? BOSSES[en.bossKind].bodyColor : "#e6dcff";
     burst(en.x,en.y-14, deathColor, 14, {maxSp:160,up:60});
     shake(en.type==="boss"?10:4, en.type==="boss"?0.3:0.15);
     if(en.type==="boss"){
