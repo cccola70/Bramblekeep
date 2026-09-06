@@ -236,9 +236,6 @@
   .keycluster .k-s{ grid-column:2; grid-row:2; }
   .keycluster .k-d{ grid-column:3; grid-row:2; }
 
-  .mini-joy{ width:34px; height:34px; border-radius:50%; background:rgba(246,236,217,.2); border:2px solid rgba(246,236,217,.4); position:relative; }
-  .mini-joy::after{ content:""; position:absolute; width:16px; height:16px; border-radius:50%; background:var(--coral); left:50%; top:50%; margin:-8px 0 0 -8px; }
-
   .bump-icon{ display:flex; align-items:center; gap:2px; }
   .bump-icon .bunny{ width:16px; height:16px; border-radius:4px; background:var(--coral); }
   .bump-icon .bolt{ font-family:"Silkscreen",monospace; font-size:13px; color:var(--amber); }
@@ -618,14 +615,6 @@
           <p>Move with <b>WASD</b> or arrow keys<span class="sub">or drag the joystick on touch screens</span></p>
         </div>
         <div class="howto-row">
-          <div class="howto-icon"><div class="shop-icon-bow"></div></div>
-          <p>Next, pick your <b>look</b> and <b>class</b><span class="sub">each animal grants a small perk; each class starts with its own weapon and level-up cards</span></p>
-        </div>
-        <div class="howto-row">
-          <div class="howto-icon"><div class="mini-joy"></div></div>
-          <p>On mobile, <b>drag anywhere</b> in the joystick circle to move<span class="sub">it appears bottom-left once you start</span></p>
-        </div>
-        <div class="howto-row">
           <div class="howto-icon bump-icon"><span class="bunny"></span><span class="bolt">⚔</span><span class="foe"></span></div>
           <p>Get close and you <b>attack automatically</b><span class="sub">no attack button - range and arc depend on your weapon</span></p>
         </div>
@@ -635,25 +624,14 @@
         </div>
         <div class="howto-row">
           <div class="howto-icon"><div class="stairs-icon"><i></i></div></div>
-          <p>Find the <b>glowing stairs</b> to descend<span class="sub">15 floors across 3 realms - stone, forest &amp; tide - each ending in a boss</span></p>
-        </div>
-        <div class="howto-row">
-          <div class="howto-icon"><span class="coin" style="width:22px;height:22px;"></span></div>
-          <p>A <b>merchant</b> sets up near the stairs twice per realm<span class="sub">bump into them to browse weapons, armor, and potions for gold</span></p>
-        </div>
-        <div class="howto-row">
-          <div class="howto-icon"><div class="shop-icon-armor" style="background:var(--coral);"></div></div>
-          <p>Find or buy <b>armor sets</b> - helmet, chest, gloves &amp; shins<span class="sub">each set is a full look with its own passive bonus</span></p>
+          <p>Find the <b>glowing stairs</b> to descend<span class="sub">15 floors, 3 realms, each with a boss - merchants sell weapons, armor &amp; potions along the way</span></p>
         </div>
         <div class="howto-row">
           <div class="howto-icon" style="font-size:20px;">🎒</div>
-          <p>Press <b>I</b> or the backpack button to open your <b>hero &amp; gear</b> screen<span class="sub">check your stats, equipped weapon &amp; armor, and every ability you've picked</span></p>
-        </div>
-        <div class="howto-row">
-          <div class="howto-icon"><kbd class="num-badge">1</kbd></div>
-          <p>Every screen works with <b>keyboard only</b><span class="sub">Tab + Enter, or number keys to pick a card/shop item, Esc to back out</span></p>
+          <p>Press <b>I</b> or the backpack button for your <b>hero &amp; gear</b> screen<span class="sub">stats, equipment, and every ability you've picked</span></p>
         </div>
       </div>
+      <p class="hint">Every screen works with keyboard only &mdash; numbers pick a card, Esc backs out.</p>
       <button class="playbtn" id="btnHowtoGo"><span id="howtoGoLabel">Let's Go!</span></button>
     </div>
 
