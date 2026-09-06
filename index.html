@@ -58,6 +58,32 @@
     .cabinet{ width:min(1040px, 78vw); }
   }
 
+  /* On touch devices (phones/tablets) the game goes edge-to-edge and fills the
+     device's real screen/resolution instead of sitting in a small centered arcade
+     cabinet. The "is-touch" class is set once in JS from the exact same touch-
+     capability check that already gates the on-screen joystick/dash button, so
+     this layout and that logic can never disagree about what counts as "mobile". */
+  .is-touch body{
+    margin:0; padding:0; min-height:0; height:100%;
+    display:block; overflow:hidden; background:var(--void);
+  }
+  .is-touch #dust{ display:none; }
+  .is-touch .cabinet{
+    position:fixed; inset:0; width:100%;
+    height:100%; height:100dvh;
+    display:flex; flex-direction:column;
+    border-radius:0; border:none; padding:0; box-shadow:none;
+    overflow:hidden;
+  }
+  .is-touch .titlebar{ display:none; }
+  .is-touch .viewport-frame{ flex:1 1 auto; min-height:0; border-radius:0; }
+  .is-touch canvas#game{ width:100%; height:100%; aspect-ratio:auto; }
+  .is-touch .hud, .is-touch .loadout, .is-touch .quest-tracker,
+  .is-touch .xplabel, .is-touch .xpbar-wrap, .is-touch .below{ flex:none; }
+  .is-touch .below{ padding-bottom:calc(2px + env(safe-area-inset-bottom, 0px)); }
+  .is-touch .joystick{ bottom:calc(14px + env(safe-area-inset-bottom, 0px)); }
+  .is-touch .dashbtn{ bottom:calc(14px + env(safe-area-inset-bottom, 0px)); }
+
   .titlebar{
     display:flex;
     align-items:baseline;
@@ -2202,7 +2228,10 @@ function drawCreature(ctx, kind, ent, camx, camy){
 const TILE = 32;
 const MAPW = 46, MAPH = 34;
 const WALL=0, FLOOR=1, STAIRS=2;
-const VIEWW = 640, VIEWH = 416;
+// logical size of the game view, in world/canvas-space units - fixed on desktop but on
+// touch devices fitCanvas() (below) sets these to the device's actual screen size, so the
+// game genuinely fills the phone/tablet's resolution instead of a small letterboxed frame
+let VIEWW = 640, VIEWH = 416;
 const DASH_DURATION = 0.14, DASH_COOLDOWN = 1.4, DASH_DISTANCE = TILE*2;
 
 let state = "title"; // title | playing | paused | inventory | gearcompare | shop | quest | levelup | bossclear | dead | win
@@ -2741,11 +2770,14 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 // converts a mouse event's page-space click into world-space coordinates, accounting for
-// the canvas's responsive CSS scaling (its internal resolution is fixed at VIEWW x VIEWH
-// but it's displayed at whatever size the layout gives it) and the current camera offset
+// the canvas's responsive CSS scaling (its logical drawing space is VIEWW x VIEWH but it's
+// displayed at whatever size the layout gives it, and on touch devices its backing-store
+// pixel resolution is further scaled up by devicePixelRatio via fitCanvas()'s ctx transform -
+// scaling by VIEWW/VIEWH rather than canvas.width/height keeps this correct either way) and
+// the current camera offset
 function canvasToWorld(clientX, clientY){
   const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width/rect.width, scaleY = canvas.height/rect.height;
+  const scaleX = VIEWW/rect.width, scaleY = VIEWH/rect.height;
   return { x:(clientX-rect.left)*scaleX + camX, y:(clientY-rect.top)*scaleY + camY };
 }
 // left-click pathfinds a route to the clicked tile (see computeMovePath) and walks it -
@@ -3487,6 +3519,37 @@ document.getElementById("mute").addEventListener("click", ()=>{
 
 /* ---------- touch controls (virtual joystick) ---------- */
 const isTouchDevice = matchMedia("(pointer:coarse)").matches || ("ontouchstart" in window);
+// ties the fullscreen ".is-touch" CSS layout (see <style>) to this exact same capability
+// check, so the DOM class and every touch-only JS branch always agree on what's "mobile"
+document.documentElement.classList.toggle("is-touch", isTouchDevice);
+// keeps the canvas's internal drawing-buffer resolution matched to how big it's actually
+// shown on screen: on desktop that's the fixed 640x416 arcade-cabinet frame, but on touch
+// devices the ".is-touch" CSS above lets the canvas fill the whole screen, so here VIEWW/
+// VIEWH become "however big that screen really is" and the buffer is sized at native pixel
+// density (capped for performance) so the fullscreen view is crisp, not a blown-up low-res
+// image. Every render/camera call already reads VIEWW/VIEWH instead of a hardcoded size, so
+// nothing else needs to change for the game to fill the device's actual resolution.
+const MAX_DEVICE_PIXEL_RATIO = 2;
+function fitCanvas(){
+  if(!isTouchDevice){
+    if(canvas.width!==640 || canvas.height!==416){ canvas.width=640; canvas.height=416; }
+    VIEWW = 640; VIEWH = 416;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.imageSmoothingEnabled = false;
+    return;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(1, Math.round(rect.width)), h = Math.max(1, Math.round(rect.height));
+  const dpr = Math.min(MAX_DEVICE_PIXEL_RATIO, window.devicePixelRatio||1);
+  VIEWW = w; VIEWH = h;
+  canvas.width = Math.round(w*dpr);
+  canvas.height = Math.round(h*dpr);
+  // canvas.width/height resets all context state, so the pixel-density transform and the
+  // crisp/non-blurred pixel-art setting both have to be re-applied every time it's resized
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.imageSmoothingEnabled = false;
+}
+fitCanvas();
 // swaps 3 of the how-to-play rows to touch-appropriate wording (drag-to-move, tap-to-dash,
 // tap-to-open) instead of the keyboard/mouse instructions - runs once, before the very first
 // applyStaticI18n() call, so translation capture (data-i18n-html's lazy orig-text snapshot)
@@ -3511,7 +3574,11 @@ function updateTouchControls(){
   joystick.hidden = !(isTouchDevice && state==="playing");
   dashBtn.hidden = !(isTouchDevice && state==="playing");
 }
-window.addEventListener("resize", updateTouchControls);
+// on a resize/rotation, refit the canvas to the device's (possibly now-different) screen
+// size before re-checking joystick/dash visibility
+function handleViewportResize(){ fitCanvas(); updateTouchControls(); }
+window.addEventListener("resize", handleViewportResize);
+window.addEventListener("orientationchange", handleViewportResize);
 
 function joyMove(clientX, clientY){
   let dx = clientX - joyCenter.x, dy = clientY - joyCenter.y;
