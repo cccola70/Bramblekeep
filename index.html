@@ -1149,6 +1149,7 @@ function merchantParts(){
 
 /* ---------- generic animated draw ---------- */
 function drawCreature(ctx, kind, ent, camx, camy){
+  if(!Number.isFinite(ent.x) || !Number.isFinite(ent.y)) return;
   const t = ent.animT||0;
   const sx = ent.x - camx, sy = ent.y - camy;
   const moving = ent.moving;
@@ -2099,6 +2100,7 @@ function frame(now){
 requestAnimationFrame(frame);
 
 function moveWithCollision(ent, dx, dy){
+  if(!Number.isFinite(dx) || !Number.isFinite(dy)) return;
   const r = ent.radius;
   if(dx!==0){
     const nx = ent.x + dx;
@@ -2193,16 +2195,21 @@ function update(dt){
     // contact combat both ways
     handleContact(en);
   }
-  enemies = enemies.filter(en=> !(en.dying && en.dieT>0.5));
+  enemies = enemies.filter(en=> !(en.dying && en.dieT>0.5) && Number.isFinite(en.x) && Number.isFinite(en.y));
 
   // items
   for(const it of items){ it.t+=dt; }
+  items = items.filter(it=>Number.isFinite(it.x) && Number.isFinite(it.y));
   for(let i=items.length-1;i>=0;i--){
     const it = items[i];
     if(dist2(it.x,it.y,player.x,player.y) < (player.pickupRadius*player.pickupRadius)){
       pickup(it);
       items.splice(i,1);
     }
+  }
+  if(!Number.isFinite(player.x) || !Number.isFinite(player.y)){
+    const sc = center(rooms[0] || {x:3,y:3,w:1,h:1});
+    player.x = (sc.x+0.5)*TILE; player.y = (sc.y+0.5)*TILE;
   }
 
   // passive regeneration (from cards and/or worn armor)
@@ -2324,8 +2331,10 @@ function angleDiff(a,b){
 function hitEnemy(en, dmg, angle, knockback){
   en.hp -= dmg;
   en.hurtTimer = 0.3;
-  en.x += Math.cos(angle)*knockback;
-  en.y += Math.sin(angle)*knockback;
+  const nx = en.x + Math.cos(angle)*knockback;
+  const ny = en.y + Math.sin(angle)*knockback;
+  en.x = Number.isFinite(nx) ? clamp(nx, TILE, MAPW*TILE-TILE) : en.x;
+  en.y = Number.isFinite(ny) ? clamp(ny, TILE, MAPH*TILE-TILE) : en.y;
   burst(en.x, en.y-14, "#fff", 5, {maxSp:100,up:36});
   floatText(en.x, en.y-26, "-"+dmg, "#ff6f91");
   if(en.hp<=0 && !en.dying){
@@ -2441,6 +2450,7 @@ function updateProjectiles(dt){
     if(!dead){
       for(const en of enemies){
         if(en.dying) continue;
+        if(p.hitSet && p.hitSet.has(en)) continue;
         const rr = p.radius+en.radius;
         if(dist2(p.x,p.y,en.x,en.y) < rr*rr){
           const ang = Math.atan2(en.y-p.y, en.x-p.x);
@@ -2450,6 +2460,7 @@ function updateProjectiles(dt){
             floatText(player.x, player.y-30, "+1", "#8fd694");
           }
           if(!p.piercing){ dead = true; }
+          else { p.hitSet = p.hitSet || new Set(); p.hitSet.add(en); }
           break;
         }
       }
@@ -2459,6 +2470,7 @@ function updateProjectiles(dt){
 }
 function renderProjectiles(){
   for(const p of projectiles){
+    if(!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
     if(p.kind==="cast"){
       const grd = ctx.createRadialGradient(p.x,p.y,1,p.x,p.y,10);
       grd.addColorStop(0, p.color); grd.addColorStop(1, "rgba(177,155,255,0)");
@@ -2656,6 +2668,7 @@ function renderTorchGlow(){
   }
 }
 function renderItem(it){
+  if(!Number.isFinite(it.x) || !Number.isFinite(it.y)) return;
   const bob = Math.sin(it.t*4)*3;
   if(it.type==="potion"){
     ctx.fillStyle="#5a4a68"; ctx.fillRect(it.x-5,it.y-6+bob,10,3);
