@@ -422,6 +422,50 @@
   .tree-buy:active:not(:disabled){ transform:translateY(2px); box-shadow:none; }
   .tree-buy:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
 
+  .inv-wrap{
+    width:100%; max-width:420px;
+    max-height:290px; overflow-y:auto;
+    display:flex; flex-direction:column; gap:14px;
+    margin:4px 0; padding-right:4px;
+  }
+  .inv-heading{
+    font-family:"Silkscreen",monospace; font-size:11px; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--amber);
+    text-align:left; padding-left:2px; margin-bottom:6px;
+  }
+  .inv-stat-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(112px,1fr));
+    gap:6px;
+  }
+  .inv-stat{
+    display:flex; flex-direction:column; gap:2px; text-align:left;
+    background:rgba(246,236,217,.08);
+    border:1px solid rgba(246,236,217,.16);
+    border-radius:9px; padding:6px 9px;
+  }
+  .inv-stat-label{ font-size:9.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--lavender); }
+  .inv-stat-val{ font-family:"Silkscreen",monospace; font-size:13px; color:var(--parchment); font-variant-numeric:tabular-nums; }
+  .inv-item-list{ display:flex; flex-direction:column; gap:8px; }
+  .inv-item{
+    text-align:left;
+    background:rgba(246,236,217,.08);
+    border:1px solid rgba(246,236,217,.16);
+    border-radius:10px; padding:8px 10px;
+  }
+  .inv-item-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .inv-item-name{ font-size:12.5px; font-weight:800; color:var(--parchment); }
+  .inv-item-desc{ font-size:10.5px; color:var(--lavender); line-height:1.3; margin-top:2px; }
+  .inv-item-tag{
+    font-family:"Silkscreen",monospace; font-size:8px; letter-spacing:.05em;
+    padding:2px 6px; border-radius:5px; flex:none; white-space:nowrap;
+  }
+  .tag-weapon{ background:rgba(255,111,145,.25); color:var(--coral); }
+  .tag-magic{ background:rgba(185,166,217,.3); color:var(--lavender); }
+  .tag-class{ background:rgba(245,185,66,.28); color:var(--amber); }
+  .tag-armor{ background:rgba(127,220,236,.25); color:#7fdcec; }
+  .tag-companion{ background:rgba(230,168,120,.28); color:#e6a878; }
+  .inv-empty{ font-size:11px; color:var(--lavender); text-align:left; padding:4px 2px; }
+
   .xpbar-wrap{
     position:relative;
     margin:0 10px;
@@ -502,15 +546,15 @@
     font-size:10px;
     color:var(--ink);
   }
-  #mute, #help{
+  #mute, #help, #inv{
     background:none; border:none; cursor:pointer; font-size:15px;
     color:var(--ink-soft); padding:6px; line-height:1;
     min-width:32px; min-height:32px;
     display:inline-flex; align-items:center; justify-content:center;
     border-radius:8px;
   }
-  #mute:hover, #help:hover{ color:var(--ink); background:rgba(0,0,0,.06); }
-  #mute:focus-visible, #help:focus-visible{ outline:3px solid var(--coral-dark); outline-offset:1px; }
+  #mute:hover, #help:hover, #inv:hover{ color:var(--ink); background:rgba(0,0,0,.06); }
+  #mute:focus-visible, #help:focus-visible, #inv:focus-visible{ outline:3px solid var(--coral-dark); outline-offset:1px; }
   #help{ font-family:"Silkscreen", monospace; font-weight:700; font-size:12px; }
 
   #debugbox{
@@ -602,6 +646,10 @@
           <p>Find or buy <b>armor sets</b> - helmet, chest, gloves &amp; shins<span class="sub">each set is a full look with its own passive bonus</span></p>
         </div>
         <div class="howto-row">
+          <div class="howto-icon" style="font-size:20px;">🎒</div>
+          <p>Press <b>I</b> or the backpack button to open your <b>hero &amp; gear</b> screen<span class="sub">check your stats, equipped weapon &amp; armor, and every ability you've picked</span></p>
+        </div>
+        <div class="howto-row">
           <div class="howto-icon"><kbd class="num-badge">1</kbd></div>
           <p>Every screen works with <b>keyboard only</b><span class="sub">Tab + Enter, or number keys to pick a card/shop item, Esc to back out</span></p>
         </div>
@@ -628,6 +676,12 @@
       <p>Choose one upgrade.</p>
       <div class="card-list" id="cardList"></div>
       <button class="secondarybtn" id="btnReroll">Reroll</button>
+    </div>
+
+    <div class="overlay" id="ov-inventory" hidden>
+      <h1>Hero &amp; Gear</h1>
+      <div class="inv-wrap" id="invWrap"></div>
+      <button class="playbtn" id="btnInventoryClose">Close</button>
     </div>
 
     <div class="overlay" id="ov-dead" hidden>
@@ -690,6 +744,7 @@
     <span id="toast"></span>
     <span class="controls">
       <span class="kbd-hint"><kbd>WASD</kbd> move</span>
+      <button id="inv" title="Hero &amp; gear (I)" aria-label="Hero and gear">🎒</button>
       <button id="help" title="How to play" aria-label="How to play">?</button>
       <button id="mute" title="Toggle sound" aria-label="Toggle sound">🔊</button>
     </span>
@@ -1435,7 +1490,7 @@ const WALL=0, FLOOR=1, STAIRS=2;
 const VIEWW = 640, VIEWH = 416;
 const DASH_DURATION = 0.14, DASH_COOLDOWN = 1.4, DASH_DISTANCE = TILE*2;
 
-let state = "title"; // title | playing | dead | win
+let state = "title"; // title | playing | paused | inventory | shop | levelup | bossclear | dead | win
 let floorNum = 1;
 let map, rooms, decor, torches;
 let player, enemies, items, particles, dmgNums, toastQueue;
@@ -1841,6 +1896,10 @@ window.addEventListener("keydown", e=>{
   keys[e.key.toLowerCase()]=true;
   if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(e.key.toLowerCase())) e.preventDefault();
   if(e.key===" " && !e.repeat) triggerDash();
+  if(e.key.toLowerCase()==="i" && !e.repeat){
+    if(state==="playing") openInventory();
+    else if(state==="inventory") closeInventory();
+  }
 
   // keyboard-only shortcuts: number keys pick a class, level-up card or shop offer, Escape backs out
   const classSelectOpen = !document.getElementById("ov-classselect").hidden;
@@ -1856,6 +1915,7 @@ window.addEventListener("keydown", e=>{
     if(merchant.offers[idx]) buyOffer(idx);
   } else if(e.key==="Escape"){
     if(state==="shop") document.getElementById("btnShopLeave").click();
+    else if(state==="inventory") closeInventory();
     else if(!document.getElementById("ov-upgrades").hidden) document.getElementById("btnUpgradesClose").click();
     else if(state==="paused") document.getElementById("btnHowtoGo").click();
   }
@@ -1909,7 +1969,7 @@ function goWin(){
   updateTouchControls();
 }
 function showOverlay(id){
-  ["ov-title","ov-howto","ov-classselect","ov-shop","ov-levelup","ov-bossclear","ov-upgrades","ov-dead","ov-win"].forEach(k=>{
+  ["ov-title","ov-howto","ov-classselect","ov-shop","ov-levelup","ov-inventory","ov-bossclear","ov-upgrades","ov-dead","ov-win"].forEach(k=>{
     document.getElementById(k).hidden = (k!==id);
   });
   if(id){
@@ -2090,7 +2150,7 @@ function currentOverlayId(){
   return null;
 }
 function openHowto(){
-  if(state==="paused" || state==="shop" || state==="levelup" || state==="bossclear") return; // an overlay is already active - ignore
+  if(state==="paused" || state==="shop" || state==="levelup" || state==="bossclear" || state==="inventory") return; // an overlay is already active - ignore
   if(!document.getElementById("ov-upgrades").hidden) return; // skill trees open - ignore
   if(!document.getElementById("ov-classselect").hidden) return; // class select open - ignore
   if(state==="playing"){
@@ -2186,6 +2246,100 @@ document.getElementById("btnShopLeave").addEventListener("click", ()=>{
   showOverlay(null);
   updateTouchControls();
 });
+
+/* ---------- inventory (hero stats, equipment, abilities) ---------- */
+function openInventory(){
+  if(state!=="playing" || !player) return; // only mid-run, and not over another overlay
+  state = "inventory";
+  buildInventoryOverlay();
+  showOverlay("ov-inventory");
+  updateTouchControls();
+}
+function closeInventory(){
+  state = "playing";
+  showOverlay(null);
+  updateTouchControls();
+}
+function invStatRow(label, val){
+  return `<div class="inv-stat"><span class="inv-stat-label">${label}</span><span class="inv-stat-val">${val}</span></div>`;
+}
+function buildInventoryOverlay(){
+  const wrap = document.getElementById("invWrap");
+  wrap.innerHTML = "";
+  const cls = CLASSES[player.classId];
+  const animal = ANIMALS[player.animalId] || ANIMALS.bunny;
+  const armor = getArmor();
+  const wpn = getEffectiveWeapon();
+  const m = player.mods;
+  const speedPct = Math.round(m.moveSpeedMult*(armor.moveSpeedMult||1)*100);
+  const reductionPct = Math.round(Math.min(0.75, m.dmgReduction+(armor.dmgReduction||0))*100);
+  const goldPct = Math.round((m.goldMult-1)*100);
+  const dmgLabel = (Math.round(wpn.dmg*10)/10).toString();
+
+  const heroSec = document.createElement("div");
+  heroSec.className = "inv-section";
+  heroSec.innerHTML =
+    `<div class="inv-heading">Hero Stats${cls?` &mdash; ${cls.name} the ${animal.name}`:""}</div>` +
+    `<div class="inv-stat-grid">` +
+      invStatRow("Level", player.level) +
+      invStatRow("HP", `${Math.max(0,Math.ceil(player.hp))} / ${player.maxhp}`) +
+      invStatRow("Gold", player.gold) +
+      invStatRow("Floor", `${floorNum} / ${TOTAL_FLOORS}`) +
+      invStatRow("Move Speed", speedPct+"%") +
+      invStatRow("Weapon DMG", dmgLabel) +
+      invStatRow("Attack CD", wpn.cooldown.toFixed(2)+"s") +
+      invStatRow("Range", Math.round(wpn.range)) +
+      invStatRow("Dmg Reduction", reductionPct+"%") +
+      invStatRow("Gold Bonus", (goldPct>0?"+":"")+goldPct+"%") +
+      invStatRow("Pickup Radius", Math.round(player.pickupRadius)) +
+    `</div>`;
+  wrap.appendChild(heroSec);
+
+  const gearSec = document.createElement("div");
+  gearSec.className = "inv-section";
+  gearSec.innerHTML = `<div class="inv-heading">Equipment</div>`;
+  const gearList = document.createElement("div");
+  gearList.className = "inv-item-list";
+  gearList.innerHTML =
+    `<div class="inv-item">` +
+      `<div class="inv-item-top"><span class="inv-item-name">${WEAPONS[player.weapon].name}</span><span class="inv-item-tag tag-weapon">Weapon</span></div>` +
+      `<div class="inv-item-desc">${WEAPONS[player.weapon].desc||""}</div>` +
+    `</div>` +
+    `<div class="inv-item">` +
+      `<div class="inv-item-top"><span class="inv-item-name">${armor.name}</span><span class="inv-item-tag tag-armor">Armor</span></div>` +
+      `<div class="inv-item-desc">${armor.desc||""}</div>` +
+    `</div>` +
+    `<div class="inv-item">` +
+      `<div class="inv-item-top"><span class="inv-item-name">${animal.name}</span><span class="inv-item-tag tag-companion">Companion</span></div>` +
+      `<div class="inv-item-desc">${animal.perkDesc}</div>` +
+    `</div>`;
+  gearSec.appendChild(gearList);
+  wrap.appendChild(gearSec);
+
+  const abilSec = document.createElement("div");
+  abilSec.className = "inv-section";
+  const chosen = (player.cardsChosen||[]).map(id=>findCardById(id)).filter(Boolean);
+  abilSec.innerHTML = `<div class="inv-heading">Abilities${chosen.length?` (${chosen.length})`:""}</div>`;
+  const abilList = document.createElement("div");
+  abilList.className = "inv-item-list";
+  if(chosen.length===0){
+    abilList.innerHTML = `<div class="inv-empty">No abilities picked up yet &mdash; level up to choose one.</div>`;
+  } else {
+    chosen.forEach(card=>{
+      const row = document.createElement("div");
+      row.className = "inv-item";
+      const tagLabel = card.type==="weapon"?"Weapon":card.type==="class"?"Class":"Magic";
+      row.innerHTML =
+        `<div class="inv-item-top"><span class="inv-item-name">${card.name}</span><span class="inv-item-tag tag-${card.type}">${tagLabel}</span></div>` +
+        `<div class="inv-item-desc">${card.desc}</div>`;
+      abilList.appendChild(row);
+    });
+  }
+  abilSec.appendChild(abilList);
+  wrap.appendChild(abilSec);
+}
+document.getElementById("inv").addEventListener("click", openInventory);
+document.getElementById("btnInventoryClose").addEventListener("click", closeInventory);
 
 /* ---------- leveling / ability cards ---------- */
 let pendingLevelUps = 0;
