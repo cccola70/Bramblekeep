@@ -256,6 +256,12 @@
   .shop-icon-heal{ width:22px; height:22px; background:var(--coral); border-radius:50%; }
   .shop-icon-heal::after{ content:"+"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:15px; }
   .shop-icon-armor{ width:22px; height:24px; clip-path:polygon(50% 0%, 100% 16%, 100% 55%, 50% 100%, 0% 55%, 0% 16%); background:var(--parchment-dark); }
+  .shop-icon-staff{ position:relative; width:4px; height:26px; background:#5a3d28; border-radius:2px; }
+  .shop-icon-staff::after{ content:""; position:absolute; top:-9px; left:-4px; width:12px; height:12px; border-radius:50%; background:#b19bff; box-shadow:0 0 6px #b19bff; }
+  .shop-icon-bow{ position:relative; width:3px; height:28px; background:transparent; border:2px solid #8a5a44; border-width:2px 0 2px 2px; border-radius:0 50% 50% 0/0 60% 60% 0; }
+  .shop-icon-bow::after{ content:""; position:absolute; top:1px; left:2px; width:1px; height:24px; background:#e8eef2; }
+  .shop-icon-gauntlets{ position:relative; width:11px; height:11px; background:#cfae4a; border-radius:3px; }
+  .shop-icon-gauntlets::after{ content:""; position:absolute; left:14px; top:0; width:11px; height:11px; background:#cfae4a; border-radius:3px; }
 
   .card-list{
     display:flex; gap:10px; flex-wrap:wrap; justify-content:center;
@@ -283,9 +289,36 @@
   }
   .card-weapon .card-badge{ background:rgba(255,111,145,.25); color:var(--coral); }
   .card-magic .card-badge{ background:rgba(185,166,217,.3); color:var(--lavender); }
+  .card-class .card-badge{ background:rgba(245,185,66,.28); color:var(--amber); }
   .card-name{ font-size:12.5px; font-weight:800; color:var(--parchment); }
   .card-desc{ font-size:11px; color:var(--lavender); line-height:1.35; }
   .num-badge{ flex:none; }
+
+  .class-grid{
+    display:flex; gap:10px; flex-wrap:wrap; justify-content:center;
+    width:100%; max-width:440px; margin:4px 0;
+  }
+  .class-card{
+    font:inherit; text-align:center; color:inherit;
+    -webkit-appearance:none; appearance:none;
+    flex:1 1 96px; max-width:110px;
+    background:rgba(246,236,217,.08);
+    border:1px solid rgba(246,236,217,.2);
+    border-radius:14px;
+    padding:10px 8px;
+    cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    position:relative;
+    transition:transform .08s ease, background .15s ease;
+  }
+  .class-card:hover{ background:rgba(246,236,217,.16); transform:translateY(-2px); }
+  .class-card:active{ transform:translateY(0); }
+  .class-card:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
+  .class-card .num-badge{ position:absolute; top:6px; left:6px; }
+  .class-icon-canvas{ width:44px; height:44px; image-rendering:auto; }
+  .class-name{ font-size:13px; font-weight:800; color:var(--parchment); }
+  .class-weaponname{ font-family:"Silkscreen",monospace; font-size:8.5px; color:var(--amber); }
+  .class-desc{ font-size:10px; color:var(--lavender); line-height:1.3; }
 
   .secondarybtn{
     font-family:"Baloo 2",sans-serif; font-weight:700; font-size:12px;
@@ -485,6 +518,10 @@
           <p>Move with <b>WASD</b> or arrow keys<span class="sub">or drag the joystick on touch screens</span></p>
         </div>
         <div class="howto-row">
+          <div class="howto-icon"><div class="shop-icon-bow"></div></div>
+          <p>Next, pick a <b>class</b> - Warrior, Mage, Ranger or Monk<span class="sub">each starts with its own weapon and level-up cards</span></p>
+        </div>
+        <div class="howto-row">
           <div class="howto-icon"><div class="mini-joy"></div></div>
           <p>On mobile, <b>drag anywhere</b> in the joystick circle to move<span class="sub">it appears bottom-left once you start</span></p>
         </div>
@@ -510,6 +547,12 @@
         </div>
       </div>
       <button class="playbtn" id="btnHowtoGo"><span id="howtoGoLabel">Let's Go!</span></button>
+    </div>
+
+    <div class="overlay" id="ov-classselect" hidden>
+      <h1>Choose Your Class</h1>
+      <p>Each class starts with a signature weapon and unlocks its own level-up cards for the run.</p>
+      <div class="class-grid" id="classGrid"></div>
     </div>
 
     <div class="overlay" id="ov-shop" hidden>
@@ -578,7 +621,7 @@
     <div class="floorlabel">FLOOR <b id="floorNum">1</b>/15</div>
     <div class="goldwrap"><span class="coin"></span><span id="goldval">0</span></div>
   </div>
-  <div class="loadout"><span id="weaponName">Sword</span><span class="loadoutsep">·</span><span id="armorName">Traveler's Garb</span></div>
+  <div class="loadout"><span id="className">Warrior</span><span class="loadoutsep">·</span><span id="weaponName">Sword</span><span class="loadoutsep">·</span><span id="armorName">Traveler's Garb</span></div>
   <span class="xplabel">Lv.<span id="levelVal">1</span></span>
   <div class="xpbar-wrap"><div class="xpbar-fill" id="xpFill"></div></div>
   <div class="below">
@@ -703,7 +746,13 @@ const WEAPONS = {
   spear:  { name:"Long Spear",    short:"Spear",  dmg:2, range:58, arc:0.5, duration:0.24, cooldown:0.42, moveSlow:0.75, knockback:14, style:"thrust", price:5 },
   axe:    { name:"Bramble Axe",   short:"Axe",    dmg:3, range:32, arc:2.7, duration:0.32, cooldown:0.56, moveSlow:0.35, knockback:16, style:"chop", price:8 },
   hammer: { name:"War Hammer",    short:"Hammer", dmg:5, range:28, arc:3.6, duration:0.44, cooldown:0.78, moveSlow:0.18, knockback:26, style:"slam", stun:0.4, price:12 },
+  staff:  { name:"Emberwood Staff", short:"Staff", dmg:2, range:220, arc:6.3, duration:0.32, cooldown:0.55, moveSlow:0.7, knockback:6, style:"cast", price:9,
+    projectile:true, projectileSpeed:260, projectileRadius:7, projectileLife:1.1, projectileColor:"#b19bff" },
+  bow:    { name:"Hunter's Bow", short:"Bow", dmg:2, range:260, arc:6.3, duration:0.26, cooldown:0.48, moveSlow:0.75, knockback:8, style:"shoot", price:9,
+    projectile:true, projectileSpeed:340, projectileRadius:5, projectileLife:0.9, projectileColor:"#e8eef2" },
+  gauntlets: { name:"Storm Gauntlets", short:"Gauntlets", dmg:1, range:24, arc:1.7, duration:0.09, cooldown:0.14, moveSlow:0.85, knockback:5, style:"jab", price:7 },
 };
+const FINDABLE_WEAPONS = ["spear","axe","hammer","staff","bow","gauntlets"];
 
 /* ---------- bosses ---------- */
 const BOSSES = {
@@ -808,13 +857,58 @@ const CARDS = [
   {id:"ward",      type:"magic",  name:"Bramble Ward",   desc:"Take 15% less contact damage",     apply:p=>{ p.mods.dmgReduction=Math.min(0.6,p.mods.dmgReduction+0.15); }},
 ];
 function drawCards(n){
-  const pool = CARDS.slice();
+  const classCards = (player && CLASSES[player.classId] && CLASSES[player.classId].cards) || [];
+  const pool = CARDS.concat(classCards);
   for(let i=pool.length-1;i>0;i--){
     const j = Math.floor(Math.random()*(i+1));
     [pool[i],pool[j]] = [pool[j],pool[i]];
   }
   return pool.slice(0,n);
 }
+function findCardById(id){
+  let found = CARDS.find(c=>c.id===id);
+  if(found) return found;
+  for(const cls of Object.values(CLASSES)){
+    found = cls.cards.find(c=>c.id===id);
+    if(found) return found;
+  }
+  return null;
+}
+
+/* ---------- classes ----------
+   Each class starts with a signature weapon and adds its own cards into the
+   level-up pool for the rest of the run. Any weapon can still be found or
+   bought regardless of class - the class is a build identity, not a lock. */
+const CLASSES = {
+  warrior: { id:"warrior", name:"Warrior", weapon:"sword",
+    desc:"A balanced melee fighter, tough and reliable.",
+    cards:[
+      {id:"w_cleave",     type:"class", name:"Cleave",     desc:"+25% swing arc",   apply:p=>{ p.mods.arcMult*=1.25; }},
+      {id:"w_juggernaut", type:"class", name:"Juggernaut", desc:"+20% max HP",      apply:p=>{ const add=Math.max(1,Math.round(p.baseMaxHp*0.2)); p.baseMaxHp+=add; recalcMaxHp(); p.hp=Math.min(p.maxhp,p.hp+add); }},
+      {id:"w_retaliate",  type:"class", name:"Retaliate",  desc:"+2 thorns damage", apply:p=>{ p.mods.thorns+=2; }},
+    ]},
+  mage: { id:"mage", name:"Mage", weapon:"staff",
+    desc:"A ranged spellcaster who blasts foes from afar.",
+    cards:[
+      {id:"m_focus",      type:"class", name:"Arcane Focus", desc:"+30% spell damage",             apply:p=>{ p.mods.styleDmgMult.cast=(p.mods.styleDmgMult.cast||1)*1.3; }},
+      {id:"m_pierce",     type:"class", name:"Piercing Bolt", desc:"Spells pierce through enemies", apply:p=>{ p.mods.staffPierce=true; }},
+      {id:"m_overcharge", type:"class", name:"Overcharge",   desc:"-20% spell cooldown",            apply:p=>{ p.mods.styleCdMult.cast=(p.mods.styleCdMult.cast||1)*0.8; }},
+    ]},
+  ranger: { id:"ranger", name:"Ranger", weapon:"bow",
+    desc:"A precise archer who strikes from range.",
+    cards:[
+      {id:"r_eagleeye",  type:"class", name:"Eagle Eye",  desc:"+25% bow range",                  apply:p=>{ p.mods.styleRangeMult.shoot=(p.mods.styleRangeMult.shoot||1)*1.25; }},
+      {id:"r_multishot", type:"class", name:"Multishot",  desc:"20% chance to fire a second arrow", apply:p=>{ p.mods.multishotChance+=0.2; }},
+      {id:"r_quickdraw", type:"class", name:"Quick Draw", desc:"-20% bow cooldown",                apply:p=>{ p.mods.styleCdMult.shoot=(p.mods.styleCdMult.shoot||1)*0.8; }},
+    ]},
+  monk: { id:"monk", name:"Monk", weapon:"gauntlets",
+    desc:"A lightning-fast striker with bare-knuckle gauntlets.",
+    cards:[
+      {id:"k_flurry",     type:"class", name:"Flurry",     desc:"-20% gauntlet cooldown", apply:p=>{ p.mods.styleCdMult.jab=(p.mods.styleCdMult.jab||1)*0.8; }},
+      {id:"k_ironfists",  type:"class", name:"Iron Fists", desc:"+40% gauntlet damage",   apply:p=>{ p.mods.styleDmgMult.jab=(p.mods.styleDmgMult.jab||1)*1.4; }},
+      {id:"k_adrenaline", type:"class", name:"Adrenaline", desc:"+15% move speed",        apply:p=>{ p.mods.moveSpeedMult*=1.15; }},
+    ]},
+};
 
 function fillSoftRect(ctx, x, y, w, h){
   const r = Math.min(2.2, w/2, h/2);
@@ -853,6 +947,26 @@ function weaponParts(type){
         {x:1.2,y:5.4,w:4.2,h:3.2,c:"#9aa7b5", group:"weapon"},
         {x:1.2,y:5.4,w:4.2,h:0.9,c:"#cfd8e3", group:"weapon"},
       ];
+    case "staff":
+      return [
+        {x:2.75,y:2,w:0.6,h:9.4,c:"#5a3d28", group:"weapon"},
+        {x:2.35,y:10.8,w:1.4,h:1.4,c:"#b19bff", group:"weapon"},
+        {x:2.65,y:11.1,w:0.5,h:0.5,c:"#e6dcff", group:"weapon"},
+      ];
+    case "bow":
+      return [
+        {x:2.3,y:1.6,w:0.6,h:2.2,c:"#8a5a44", group:"weapon"},
+        {x:2.9,y:3.6,w:0.7,h:2.8,c:"#8a5a44", group:"weapon"},
+        {x:2.3,y:6.2,w:0.6,h:2.2,c:"#8a5a44", group:"weapon"},
+        {x:2.65,y:2.0,w:0.25,h:6.2,c:"#e8eef2", group:"weapon"},
+      ];
+    case "gauntlets":
+      return [
+        {x:-3.6,y:1.9,w:1.5,h:1.5,c:"#cfae4a", group:"armL"},
+        {x:2.2,y:1.9,w:1.5,h:1.5,c:"#cfae4a", group:"armR"},
+        {x:-3.6,y:1.9,w:1.5,h:0.5,c:"#8a6a1a", group:"armL"},
+        {x:2.2,y:1.9,w:1.5,h:0.5,c:"#8a6a1a", group:"armR"},
+      ];
     case "sword":
     default:
       return [
@@ -871,6 +985,17 @@ function weaponSwingPose(style, p){
       return { dx: bell*1.2, dy:0, rot: -1.1+p*2.3, squash:bell*0.9 };
     case "slam": // hammer: overhead to forward-down
       return { dx: bell*0.6, dy:-bell*1.2, rot: -2.4+p*3.1, squash:bell*1.5 };
+    case "cast": { // staff: raise the orb, glow, release
+      const raise = Math.sin(clamp(p,0,1)*Math.PI*0.5);
+      return { dx: raise*1.2, dy: raise*1.8, rot: -0.15+p*0.3, squash:bell*0.5 };
+    }
+    case "shoot": { // bow: draw back, then snap forward on release
+      const draw = p<0.5 ? -(0.5-p)*4 : 0;
+      const snap = p>=0.5 ? (p-0.5)*8 : 0;
+      return { dx: draw+snap, dy:0, rot:0, squash:bell*0.4 };
+    }
+    case "jab": // gauntlets: a quick double-fisted punch, both arms
+      return { dx: bell*3, dy:0, rot:0, squash:bell*0.3 };
     case "slash": // sword: quick arc
     default:
       return { dx: bell*2.2, dy:0, rot: -1.0+p*1.8, squash:bell*0.8 };
@@ -1050,8 +1175,14 @@ function drawCreature(ctx, kind, ent, camx, camy){
     if(ent.attackTimer>0){
       const p = 1 - clamp(ent.attackTimer/wpn.duration, 0, 1);
       const pose = weaponSwingPose(wpn.style, p);
-      groupOffset.armR = {dx:pose.dx*0.5, dy:pose.dy*0.5};
-      groupOffset.weapon = {dx:pose.dx, dy:pose.dy, rot:pose.rot};
+      if(wpn.style==="jab"){
+        // gauntlets: both fists punch together, no separate "weapon" prop to move
+        groupOffset.armL = {dx:pose.dx, dy:pose.dy};
+        groupOffset.armR = {dx:pose.dx, dy:pose.dy};
+      } else {
+        groupOffset.armR = {dx:pose.dx*0.5, dy:pose.dy*0.5};
+        groupOffset.weapon = {dx:pose.dx, dy:pose.dy, rot:pose.rot};
+      }
       squashX = 1+pose.squash*0.14; squashY = 1-pose.squash*0.1;
     } else {
       groupOffset.weapon = {rot:0};
@@ -1127,6 +1258,7 @@ let state = "title"; // title | playing | dead | win
 let floorNum = 1;
 let map, rooms, decor, torches;
 let player, enemies, items, particles, dmgNums, toastQueue;
+let projectiles = [];
 let merchant = null;
 let biome = BIOMES[0];
 let camX=0, camY=0, shakeT=0, shakeMag=0;
@@ -1184,6 +1316,7 @@ function saveRun(){
   try{
     const data = {
       floorNum,
+      classId: player.classId||null,
       weapon: player.weapon, armor: player.armor,
       gold: player.gold, hp: player.hp,
       level: player.level, xp: player.xp, xpToNext: player.xpToNext,
@@ -1209,9 +1342,9 @@ function continueRun(){
   const saved = loadSavedRun();
   if(!saved) return;
   Audio1.unlock();
-  player = newPlayer();
+  player = newPlayer(CLASSES[saved.classId] ? saved.classId : null);
   (saved.cardsChosen||[]).forEach(id=>{
-    const card = CARDS.find(c=>c.id===id);
+    const card = findCardById(id);
     if(card) card.apply(player);
   });
   player.cardsChosen = saved.cardsChosen||[];
@@ -1322,7 +1455,7 @@ function spawnFloor(){
   if(floorNum === biome.range[1]){ spawnBossFloor(); return; }
 
   genMap();
-  enemies = []; items = []; merchant = null; particles = particles||[]; dmgNums = dmgNums||[];
+  enemies = []; items = []; merchant = null; projectiles = []; particles = particles||[]; dmgNums = dmgNums||[];
   const startRoom = rooms[0] || {x:2,y:2,w:6,h:6};
   const sc = center(startRoom);
   player.x = (sc.x+0.5)*TILE; player.y = (sc.y+0.5)*TILE;
@@ -1353,14 +1486,14 @@ function spawnFloor(){
     items.push({type:"gold", x:p.x, y:p.y, amount:randi(1,3), t:Math.random()*10});
   }
   if(biomeFloor===2 || biomeFloor===4){
-    const freeChoices = ["spear","axe","hammer"].filter(w=>w!==player.weapon);
-    const freeType = choice(freeChoices.length?freeChoices:["spear","axe","hammer"]);
+    const freeChoices = FINDABLE_WEAPONS.filter(w=>w!==player.weapon);
+    const freeType = choice(freeChoices.length?freeChoices:FINDABLE_WEAPONS);
     const midRoom = rooms[Math.floor(rooms.length/2)];
     const fp = randPointInRoom(midRoom);
     items.push({type:"weaponPickup", weapon:freeType, x:fp.x, y:fp.y, t:0});
 
-    const choices = ["spear","axe","hammer"].filter(w=>w!==player.weapon);
-    const wtype = choice(choices.length?choices:["spear","axe","hammer"]);
+    const choices = FINDABLE_WEAPONS.filter(w=>w!==player.weapon);
+    const wtype = choice(choices.length?choices:FINDABLE_WEAPONS);
     const armorChoices = Object.keys(ARMOR_SETS).filter(k=>k!==player.armor);
     const atype = choice(armorChoices.length?armorChoices:Object.keys(ARMOR_SETS));
     const stairsRoom = rooms[rooms.length-1];
@@ -1397,7 +1530,7 @@ function spawnFloor(){
 
 function spawnBossFloor(){
   genBossArena();
-  enemies = []; items = []; merchant = null;
+  enemies = []; items = []; merchant = null; projectiles = [];
   const r = rooms[0];
   const cx = (r.x+r.w/2)*TILE;
   player.x = cx; player.y = (r.y+r.h-2.5)*TILE;
@@ -1428,10 +1561,12 @@ function makeEnemy(type,x,y,bossKind){
 }
 
 /* ---------- player ---------- */
-function newPlayer(){
+function newPlayer(classId){
+  const cls = CLASSES[classId] || null;
   const p = {
     x:0,y:0,facing:1,radius:11,speed:150,
-    baseMaxHp:BASE_MAX_HP,weapon:"sword",armor:"traveler",
+    baseMaxHp:BASE_MAX_HP,weapon:(cls&&cls.weapon)||"sword",armor:"traveler",
+    classId: classId||null,
     animT:0,moving:false,hurtTimer:0,invuln:0,
     attackTimer:0,attackCd:0,swingAngle:0,swingHasHit:false,
     gold:0,dying:false,dieT:0,bossesDefeatedThisRun:0,cardsChosen:[],
@@ -1440,6 +1575,7 @@ function newPlayer(){
       dmgAdd:0,cdMult:1,rangeMult:1,arcMult:1,knockbackMult:1,moveSpeedMult:1,
       vampChance:0,regenRate:0,thorns:0,
       swingMoveMult:1,doubleHitChance:0,secondWindCharges:0,goldMult:1,dmgReduction:0,
+      styleDmgMult:{},styleCdMult:{},styleRangeMult:{},staffPierce:false,multishotChance:0,
     },
   };
   applyMetaUpgrades(p);
@@ -1451,12 +1587,15 @@ function getEffectiveWeapon(){
   const base = WEAPONS[player.weapon] || WEAPONS.sword;
   const m = player.mods;
   const armorDmgMult = getArmor().dmgMult || 1;
+  const styleDmgMult = (m.styleDmgMult && m.styleDmgMult[base.style]) || 1;
+  const styleCdMult = (m.styleCdMult && m.styleCdMult[base.style]) || 1;
+  const styleRangeMult = (m.styleRangeMult && m.styleRangeMult[base.style]) || 1;
   return {
     ...base,
-    dmg: (base.dmg + m.dmgAdd) * armorDmgMult,
-    cooldown: base.cooldown * m.cdMult,
-    duration: base.duration * m.cdMult,
-    range: base.range * m.rangeMult,
+    dmg: (base.dmg + m.dmgAdd) * armorDmgMult * styleDmgMult,
+    cooldown: base.cooldown * m.cdMult * styleCdMult,
+    duration: base.duration * m.cdMult * styleCdMult,
+    range: base.range * m.rangeMult * styleRangeMult,
     arc: base.arc * m.arcMult,
     knockback: base.knockback * m.knockbackMult,
   };
@@ -1488,8 +1627,13 @@ window.addEventListener("keydown", e=>{
   keys[e.key.toLowerCase()]=true;
   if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(e.key.toLowerCase())) e.preventDefault();
 
-  // keyboard-only shortcuts: number keys pick a level-up card or shop offer, Escape backs out
-  if(state==="levelup" && /^[1-3]$/.test(e.key)){
+  // keyboard-only shortcuts: number keys pick a class, level-up card or shop offer, Escape backs out
+  const classSelectOpen = !document.getElementById("ov-classselect").hidden;
+  if(classSelectOpen && /^[1-4]$/.test(e.key)){
+    const idx = parseInt(e.key,10)-1;
+    const btn = document.getElementById("classGrid").children[idx];
+    if(btn) btn.click();
+  } else if(state==="levelup" && /^[1-3]$/.test(e.key)){
     const idx = parseInt(e.key,10)-1;
     if(currentCardChoices[idx]) chooseCard(idx);
   } else if(state==="shop" && merchant && /^[1-4]$/.test(e.key)){
@@ -1508,11 +1652,11 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
-function startGame(){
+function startGame(classId){
   Audio1.unlock();
-  player = newPlayer();
+  player = newPlayer(classId);
   floorNum = 1;
-  particles = []; dmgNums = [];
+  particles = []; dmgNums = []; projectiles = [];
   spawnFloor();
   state = "playing";
   showOverlay(null);
@@ -1547,7 +1691,7 @@ function goWin(){
   updateTouchControls();
 }
 function showOverlay(id){
-  ["ov-title","ov-howto","ov-shop","ov-levelup","ov-bossclear","ov-upgrades","ov-dead","ov-win"].forEach(k=>{
+  ["ov-title","ov-howto","ov-classselect","ov-shop","ov-levelup","ov-bossclear","ov-upgrades","ov-dead","ov-win"].forEach(k=>{
     document.getElementById(k).hidden = (k!==id);
   });
   if(id){
@@ -1555,6 +1699,35 @@ function showOverlay(id){
     const btn = document.getElementById(id).querySelector("button:not(:disabled):not([hidden])");
     if(btn) btn.focus();
   }
+}
+
+/* ---------- class selection (before every fresh run) ---------- */
+function openClassSelect(){
+  buildClassSelect();
+  showOverlay("ov-classselect");
+}
+function buildClassSelect(){
+  const grid = document.getElementById("classGrid");
+  grid.innerHTML = "";
+  Object.values(CLASSES).forEach((cls, idx)=>{
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "class-card";
+    btn.innerHTML =
+      `<kbd class="num-badge">${idx+1}</kbd>` +
+      `<canvas class="class-icon-canvas" width="44" height="44"></canvas>` +
+      `<div class="class-name">${cls.name}</div>` +
+      `<div class="class-weaponname">${WEAPONS[cls.weapon].name}</div>` +
+      `<div class="class-desc">${cls.desc}</div>`;
+    btn.addEventListener("click", ()=>startGame(cls.id));
+    grid.appendChild(btn);
+    const iconCanvas = btn.querySelector(".class-icon-canvas");
+    const ictx = iconCanvas.getContext("2d");
+    ictx.save();
+    ictx.translate(22, 32);
+    drawWeaponIcon(ictx, cls.weapon);
+    ictx.restore();
+  });
 }
 
 /* ---------- boss checkpoint: continue deeper, or bank shards and quit ---------- */
@@ -1674,6 +1847,7 @@ function currentOverlayId(){
 function openHowto(){
   if(state==="paused" || state==="shop" || state==="levelup" || state==="bossclear") return; // an overlay is already active - ignore
   if(!document.getElementById("ov-upgrades").hidden) return; // skill trees open - ignore
+  if(!document.getElementById("ov-classselect").hidden) return; // class select open - ignore
   if(state==="playing"){
     pausedFrom = "playing";
     state = "paused";
@@ -1796,7 +1970,7 @@ function buildLevelUpOverlay(){
     el.type = "button";
     el.className = "card card-"+card.type;
     el.innerHTML =
-      `<div class="card-top"><span class="card-badge">${card.type==="weapon"?"WEAPON":"MAGIC"}</span><kbd class="num-badge">${idx+1}</kbd></div>` +
+      `<div class="card-top"><span class="card-badge">${card.type==="weapon"?"WEAPON":card.type==="class"?"CLASS":"MAGIC"}</span><kbd class="num-badge">${idx+1}</kbd></div>` +
       `<div class="card-name">${card.name}</div>` +
       `<div class="card-desc">${card.desc}</div>`;
     el.addEventListener("click", ()=>chooseCard(idx));
@@ -1838,7 +2012,7 @@ document.getElementById("btnHowtoGo").addEventListener("click", ()=>{
     state = "playing";
     showOverlay(null);
   } else if(pausedFrom==="ov-title" || pausedFrom===null){
-    startGame();
+    openClassSelect();
   } else {
     // came from the death/win screen via the help button - return to it
     showOverlay(pausedFrom);
@@ -1846,8 +2020,8 @@ document.getElementById("btnHowtoGo").addEventListener("click", ()=>{
   pausedFrom = null;
   updateTouchControls();
 });
-document.getElementById("btnRetry").addEventListener("click", startGame);
-document.getElementById("btnAgain").addEventListener("click", startGame);
+document.getElementById("btnRetry").addEventListener("click", openClassSelect);
+document.getElementById("btnAgain").addEventListener("click", openClassSelect);
 document.getElementById("mute").addEventListener("click", ()=>{
   muted = !muted; Audio1.setMuted(muted);
   document.getElementById("mute").textContent = muted? "🔇":"🔊";
@@ -1974,6 +2148,7 @@ function update(dt){
   if(player.hurtTimer>0) player.hurtTimer-=dt;
   if(player.invuln>0) player.invuln-=dt;
   updatePlayerAttack(dt);
+  updateProjectiles(dt);
 
   // enemies
   for(const en of enemies){
@@ -2211,6 +2386,10 @@ function updatePlayerAttack(dt){
 }
 
 function applySwing(wpn){
+  if(wpn.projectile){
+    spawnProjectile(wpn);
+    return;
+  }
   let hitCount = 0;
   for(const en of enemies){
     if(en.dying) continue;
@@ -2233,6 +2412,67 @@ function applySwing(wpn){
   if(hitCount>0){
     Audio1.hit();
     shake(wpn.knockback>18?6:3, wpn.knockback>18?0.18:0.12);
+  }
+}
+
+/* ---------- ranged weapons (staff/bow) fire projectiles instead of a melee arc ---------- */
+function spawnProjectile(wpn){
+  const piercing = wpn.style==="cast" && !!player.mods.staffPierce;
+  const fire = angle=>{
+    projectiles.push({
+      x:player.x, y:player.y,
+      vx:Math.cos(angle)*wpn.projectileSpeed, vy:Math.sin(angle)*wpn.projectileSpeed,
+      dmg:wpn.dmg, radius:wpn.projectileRadius||6, life:0, maxLife:wpn.projectileLife||1.2,
+      color:wpn.projectileColor||"#fff", piercing, knockback:wpn.knockback, kind:wpn.style,
+    });
+  };
+  fire(player.swingAngle);
+  if(wpn.style==="shoot" && player.mods.multishotChance>0 && Math.random()<player.mods.multishotChance){
+    fire(player.swingAngle + (Math.random()<0.5?-1:1)*0.18);
+  }
+  Audio1.hit();
+}
+function updateProjectiles(dt){
+  for(let i=projectiles.length-1;i>=0;i--){
+    const p = projectiles[i];
+    p.life += dt;
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    let dead = p.life>=p.maxLife || solidAt(p.x,p.y);
+    if(!dead){
+      for(const en of enemies){
+        if(en.dying) continue;
+        const rr = p.radius+en.radius;
+        if(dist2(p.x,p.y,en.x,en.y) < rr*rr){
+          const ang = Math.atan2(en.y-p.y, en.x-p.x);
+          hitEnemy(en, p.dmg, ang, p.knockback);
+          if(player.mods.vampChance>0 && Math.random()<player.mods.vampChance && player.hp<player.maxhp){
+            player.hp = Math.min(player.maxhp, player.hp+1);
+            floatText(player.x, player.y-30, "+1", "#8fd694");
+          }
+          if(!p.piercing){ dead = true; }
+          break;
+        }
+      }
+    }
+    if(dead) projectiles.splice(i,1);
+  }
+}
+function renderProjectiles(){
+  for(const p of projectiles){
+    if(p.kind==="cast"){
+      const grd = ctx.createRadialGradient(p.x,p.y,1,p.x,p.y,10);
+      grd.addColorStop(0, p.color); grd.addColorStop(1, "rgba(177,155,255,0)");
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(p.x,p.y,10,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
+    } else {
+      const ang = Math.atan2(p.vy,p.vx);
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(ang);
+      ctx.fillStyle = "#8a6a4a"; ctx.fillRect(-9,-1,14,2);
+      ctx.fillStyle = p.color; ctx.beginPath(); ctx.moveTo(5,-3); ctx.lineTo(10,0); ctx.lineTo(5,3); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
   }
 }
 
@@ -2318,6 +2558,7 @@ function render(){
     else if(d.p) drawCreature(ctx, "player", d.p, 0, 0);
   }
   renderTorchGlow();
+  renderProjectiles();
   renderParticles();
   renderDmgNums();
   ctx.restore();
@@ -2425,7 +2666,7 @@ function renderItem(it){
     ctx.fillStyle=COL.amber; ctx.beginPath(); ctx.ellipse(it.x,it.y-1+bob*0.4,8,5,0,0,7); ctx.fill();
   } else if(it.type==="weaponPickup"){
     ctx.save(); ctx.translate(it.x,it.y+bob); ctx.rotate(Math.sin(it.t*2)*0.15);
-    drawWeaponIcon(it.weapon);
+    drawWeaponIcon(ctx, it.weapon);
     ctx.restore();
     const grd = ctx.createRadialGradient(it.x,it.y,2,it.x,it.y,26);
     grd.addColorStop(0,"rgba(245,185,66,0.35)"); grd.addColorStop(1,"rgba(245,185,66,0)");
@@ -2463,7 +2704,7 @@ function drawArmorIcon(key){
   ctx.fillStyle = a.helmet; fillSoftRect(ctx,-5,-15,10,9);
   ctx.fillStyle = COL.ink; fillSoftRect(ctx,-2.5,-11,1.5,1.5); fillSoftRect(ctx,1,-11,1.5,1.5);
 }
-function drawWeaponIcon(type){
+function drawWeaponIcon(ctx, type){
   if(type==="spear"){
     ctx.fillStyle="#c9a86e"; fillSoftRect(ctx,-2,-14,3,20);
     ctx.fillStyle="#e8eef2"; fillSoftRect(ctx,-3,-20,5,7);
@@ -2475,6 +2716,18 @@ function drawWeaponIcon(type){
     ctx.fillStyle="#8a5a44"; fillSoftRect(ctx,-2,-2,3,18);
     ctx.fillStyle="#9aa7b5"; fillSoftRect(ctx,-10,-16,16,10);
     ctx.fillStyle="#cfd8e3"; fillSoftRect(ctx,-10,-16,16,3);
+  } else if(type==="staff"){
+    ctx.fillStyle="#5a3d28"; fillSoftRect(ctx,-2,-16,3,22);
+    ctx.fillStyle="#b19bff"; ctx.beginPath(); ctx.arc(0,-18,5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,0.65)"; ctx.beginPath(); ctx.arc(-1.6,-19.6,1.8,0,Math.PI*2); ctx.fill();
+  } else if(type==="bow"){
+    ctx.strokeStyle="#8a5a44"; ctx.lineWidth=2.4; ctx.lineCap="round";
+    ctx.beginPath(); ctx.arc(-3,-1,16,-1.0,1.0); ctx.stroke();
+    ctx.strokeStyle="#e8eef2"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(5.6,-14.5); ctx.lineTo(5.6,12.5); ctx.stroke();
+  } else if(type==="gauntlets"){
+    ctx.fillStyle="#cfae4a"; fillSoftRect(ctx,-11,-8,9,9); fillSoftRect(ctx,2,-8,9,9);
+    ctx.fillStyle="#8a6a1a"; fillSoftRect(ctx,-11,-8,9,2.5); fillSoftRect(ctx,2,-8,9,2.5);
   } else {
     ctx.fillStyle=COL.metal; fillSoftRect(ctx,-2,-18,4,20);
     ctx.fillStyle=COL.metalDark; fillSoftRect(ctx,-6,0,12,4);
@@ -2538,6 +2791,7 @@ function renderHUDCanvas(){
   document.getElementById("goldval").textContent = player? player.gold : 0;
   document.getElementById("weaponName").textContent = (WEAPONS[player&&player.weapon] || WEAPONS.sword).short;
   document.getElementById("armorName").textContent = (ARMOR_SETS[player&&player.armor] || ARMOR_SETS.traveler).name;
+  document.getElementById("className").textContent = (player && CLASSES[player.classId] && CLASSES[player.classId].name) || "Adventurer";
   document.getElementById("levelVal").textContent = player? player.level : 1;
   const xpPct = player ? clamp((player.xp/player.xpToNext)*100, 0, 100) : 0;
   document.getElementById("xpFill").style.width = xpPct + "%";
