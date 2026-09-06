@@ -794,6 +794,9 @@ const COL = {
 const SPRITES = {
   // ---- player (shared rig, recolored per-part by playerBodyPalette) ----
   head: ["..dddddd..",".dFFFFFFd.","dFFFFFFFFd","dFfffffffd","dffffffffd","dfeffffefd","dfkffffkfd","dsffffffsd",".dssssssd.","..dssssd.."],
+  // back-of-head: same silhouette as "head" but faceless, with a center hair-part seam -
+  // shown when the player walks up/away from the camera (see playerParts's facingDir)
+  headBack: ["..dddddd..",".dFFFFFFd.","dFFFFFFFFd","dFfffffffd","dffffffffd","dfffsffffd","dfffsffffd","dsffffffsd",".dssssssd.","..dssssd.."],
   ear:  [".dd.","dFFd","dFFd","dffd","dffd","dkkd","dssd",".dd."],
   torso:[".jjjjjj.","jrrrrrrj","jJJJJJJj","jJuuuuJj","juuuuuuj","juuuuuuj","jvvvvvvj",".jvvvvj."],
   arm:  ["dFd","dfd","dfd","dfd","dsd",".d."],
@@ -1094,14 +1097,15 @@ function weaponSwingPose(style, p){
   }
 }
 
-function playerParts(weaponType, armorKey){
+function playerParts(weaponType, armorKey, facingDir){
   const pal = playerBodyPalette();
+  const headGrid = facingDir==="back" ? SPRITES.headBack : SPRITES.head;
   const parts = [
     // ears
     {x:-2.5,y:11,w:2.1,h:5.0,sprite:{grid:SPRITES.ear,palette:pal}, group:"earL"},
     {x:0.4,y:11,w:2.1,h:5.0,sprite:{grid:SPRITES.ear,palette:pal}, group:"earR"},
-    // head
-    {x:-2.7,y:6.0,w:5.4,h:5.6,sprite:{grid:SPRITES.head,palette:pal}},
+    // head (back-of-head, faceless, when walking away from the camera)
+    {x:-2.7,y:6.0,w:5.4,h:5.6,sprite:{grid:headGrid,palette:pal}},
     // body
     {x:-2.5,y:1.4,w:5.0,h:5.2,sprite:{grid:SPRITES.torso,palette:pal}},
     // arms
@@ -1246,7 +1250,7 @@ function drawCreature(ctx, kind, ent, camx, camy){
     }
 
     squashX *= 1+idleBob*0.02; squashY *= 1-idleBob*0.02;
-    drawParts(ctx, playerParts(ent.weapon, ent.armor), sx, sy - bob*0.3, {
+    drawParts(ctx, playerParts(ent.weapon, ent.armor, ent.facingDir), sx, sy - bob*0.3, {
       flip: ent.facing<0, groupOffset, sx:squashX, sy:squashY,
       flash: ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)) : 0,
       alpha: ent.dying? Math.max(0,1-ent.dieT/0.5) : 1,
@@ -1638,7 +1642,7 @@ function makeEnemy(type,x,y,bossKind){
 function newPlayer(classId){
   const cls = CLASSES[classId] || null;
   const p = {
-    x:0,y:0,facing:1,radius:11,speed:172,
+    x:0,y:0,facing:1,facingDir:"front",radius:11,speed:172,
     baseMaxHp:BASE_MAX_HP,weapon:(cls&&cls.weapon)||"sword",armor:"traveler",
     classId: classId||null,
     animT:0,moving:false,hurtTimer:0,invuln:0,
@@ -2218,6 +2222,9 @@ function update(dt){
     const spd = player.speed*player.mods.moveSpeedMult*armorSpeedMult*inputMag*(player.attackTimer>0?wpn.moveSlow*player.mods.swingMoveMult:1);
     moveWithCollision(player, (mx/dirLen)*spd*dt, (my/dirLen)*spd*dt);
     if(mx!==0) player.facing = mx>0?1:-1;
+    // vertical movement dominating the input turns the character to show its back (walking
+    // away) or front (walking toward camera / sideways); left-right mirroring still applies on top
+    player.facingDir = (Math.abs(my)>Math.abs(mx) && my<0) ? "back" : "front";
   }
   player.animT += dt;
   if(player.hurtTimer>0) player.hurtTimer-=dt;
@@ -2580,12 +2587,17 @@ function pickup(it){
     Audio1.gold();
     burst(it.x,it.y-10, COL.amber, 6, {maxSp:70,up:30});
   } else if(it.type==="weaponPickup"){
+    const oldWeapon = player.weapon;
     player.weapon = it.weapon;
     player.attackTimer = 0; player.attackCd = 0; player.swingHasHit = false;
     toast(`Picked up the ${WEAPONS[it.weapon].name}!`);
     Audio1.upgrade();
     burst(it.x,it.y-10, "#fff", 16, {maxSp:120,up:60});
     shake(4,0.2);
+    // leave the old weapon behind so the player can swap back later
+    if(oldWeapon !== it.weapon){
+      items.push({type:"weaponPickup", weapon:oldWeapon, x:it.x, y:it.y, t:0});
+    }
   } else if(it.type==="gem"){
     Audio1.xp();
     floatText(it.x, it.y-20, "+"+it.value+" XP", "#b19bff");
@@ -2672,7 +2684,7 @@ function renderTitleScene(){
   updateParticles(0);
   if(Math.random()<0.04) particles.push({x:rand(0,VIEWW),y:VIEWH+10,vx:rand(-6,6),vy:-rand(20,40),life:0,maxLife:rand(3,5),color:"#6b5a8a",size:rand(1,2.4),grav:0});
   renderParticles();
-  if(player) drawCreature(ctx, "player", Object.assign({},player,{x:VIEWW/2,y:VIEWH/2+40,facing:1,hurtTimer:0,attackTimer:0}), 0,0);
+  if(player) drawCreature(ctx, "player", Object.assign({},player,{x:VIEWW/2,y:VIEWH/2+40,facing:1,facingDir:"front",hurtTimer:0,attackTimer:0}), 0,0);
   renderVignette();
 }
 
