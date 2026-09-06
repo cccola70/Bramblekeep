@@ -1301,8 +1301,8 @@ function applyMetaUpgrades(p){
   p.gold += skillLevel("headstart")*5;
 }
 function bankRun(){
-  const bonus = (player.bossesDefeatedThisRun||0)*10;
-  const earned = player.gold + bonus;
+  const bonus = (player.bossesDefeatedThisRun||0)*8;
+  const earned = Math.floor(player.gold*0.25) + bonus;
   meta.shards += earned;
   saveMeta();
   return earned;
@@ -1464,7 +1464,7 @@ function spawnFloor(){
 
   const enemyRooms = rooms.slice(1, -1).length? rooms.slice(1,-1) : rooms.slice(1);
   const biomeFloor = floorNum - biome.range[0] + 1; // 1-indexed floor within this biome
-  const baseCount = 3 + biomeFloor*2; // enemy count ramps per-biome; enemy stats still scale off the true floor
+  const baseCount = 5 + biomeFloor*3; // enemy count ramps per-biome; enemy stats still scale off the true floor
 
   for(let i=0;i<baseCount;i++){
     const r = choice(enemyRooms);
@@ -2210,6 +2210,21 @@ function update(dt){
   if(!Number.isFinite(player.x) || !Number.isFinite(player.y)){
     const sc = center(rooms[0] || {x:3,y:3,w:1,h:1});
     player.x = (sc.x+0.5)*TILE; player.y = (sc.y+0.5)*TILE;
+  } else if(solidAt(player.x,player.y)){
+    // safety net: if the player is ever embedded in a wall (e.g. an old save,
+    // or a knockback that predates the moveWithCollision fix), pop them back out
+    // by scanning outward for the nearest open tile instead of leaving them stuck.
+    outer: for(let radius=1; radius<=6; radius++){
+      for(let dyy=-radius; dyy<=radius; dyy++){
+        for(let dxx=-radius; dxx<=radius; dxx++){
+          const tx = Math.floor(player.x/TILE)+dxx, ty = Math.floor(player.y/TILE)+dyy;
+          if(tx>=0 && ty>=0 && tx<MAPW && ty<MAPH && map[ty][tx]!==WALL){
+            player.x = (tx+0.5)*TILE; player.y = (ty+0.5)*TILE;
+            break outer;
+          }
+        }
+      }
+    }
   }
 
   // passive regeneration (from cards and/or worn armor)
@@ -2310,7 +2325,7 @@ function handleContact(en){
     player.hurtTimer = 0.35; player.invuln = 0.9;
     en.cooldown = en.contactCd;
     const ang = Math.atan2(player.y-en.y, player.x-en.x);
-    player.x += Math.cos(ang)*14; player.y += Math.sin(ang)*14;
+    moveWithCollision(player, Math.cos(ang)*14, Math.sin(ang)*14);
     floatText(player.x, player.y-26, "-"+dmg, "#ff9d9d");
     burst(player.x,player.y-14,"#ff6f91",6,{maxSp:100,up:30});
     shake(5,0.16);
