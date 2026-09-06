@@ -438,6 +438,21 @@
   .tree-buy:active:not(:disabled){ transform:translateY(2px); box-shadow:none; }
   .tree-buy:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
 
+  .inv-tabs{
+    display:flex; gap:6px;
+    width:100%; max-width:420px; margin:2px 0 6px;
+  }
+  .inv-tab{
+    flex:1;
+    font-family:"Baloo 2",sans-serif; font-weight:700; font-size:12px;
+    background:rgba(246,236,217,.08); color:var(--lavender);
+    border:1px solid rgba(246,236,217,.2); border-radius:10px;
+    padding:7px 4px; cursor:pointer;
+    transition:background .15s ease, color .15s ease;
+  }
+  .inv-tab:hover{ background:rgba(246,236,217,.16); }
+  .inv-tab.selected{ background:var(--amber); color:var(--ink); border-color:var(--amber); }
+  .inv-tab:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
   .inv-wrap{
     width:100%; max-width:420px;
     max-height:290px; overflow-y:auto;
@@ -553,7 +568,8 @@
     padding:3px 10px 0;
   }
   .loadoutsep{ opacity:.5; }
-  .goldwrap{
+  .hud-right{ display:flex; align-items:center; gap:10px; }
+  .goldwrap, .shardwrap{
     display:flex; align-items:center; gap:6px;
     font-family:"Silkscreen", monospace;
     font-size:13px;
@@ -565,7 +581,21 @@
     box-shadow:0 1px 0 rgba(0,0,0,.25) inset;
     flex:none;
   }
-  #goldval{font-variant-numeric:tabular-nums; color:var(--ink);}
+  .shard{
+    width:12px; height:12px; flex:none;
+    background:linear-gradient(135deg, #cdeffa, #7fdcec 55%, #3aa8c2 100%);
+    clip-path:polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+  }
+  #goldval, #shardsHud{font-variant-numeric:tabular-nums; color:var(--ink);}
+  .hud-inv-btn{
+    background:var(--coral); color:#fff; border:none; border-radius:10px;
+    padding:5px 9px; font-size:16px; line-height:1; cursor:pointer;
+    box-shadow:0 3px 0 var(--coral-dark);
+    transition:transform .08s ease, box-shadow .08s ease;
+  }
+  .hud-inv-btn:hover{ filter:brightness(1.05); }
+  .hud-inv-btn:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--coral-dark); }
+  .hud-inv-btn:focus-visible{ outline:3px solid var(--coral-dark); outline-offset:2px; }
 
   .below{
     display:flex; align-items:center; justify-content:space-between;
@@ -591,15 +621,15 @@
     font-size:10px;
     color:var(--ink);
   }
-  #mute, #help, #inv{
+  #mute, #help{
     background:none; border:none; cursor:pointer; font-size:15px;
     color:var(--ink-soft); padding:6px; line-height:1;
     min-width:32px; min-height:32px;
     display:inline-flex; align-items:center; justify-content:center;
     border-radius:8px;
   }
-  #mute:hover, #help:hover, #inv:hover{ color:var(--ink); background:rgba(0,0,0,.06); }
-  #mute:focus-visible, #help:focus-visible, #inv:focus-visible{ outline:3px solid var(--coral-dark); outline-offset:1px; }
+  #mute:hover, #help:hover{ color:var(--ink); background:rgba(0,0,0,.06); }
+  #mute:focus-visible, #help:focus-visible{ outline:3px solid var(--coral-dark); outline-offset:1px; }
   #help{ font-family:"Silkscreen", monospace; font-weight:700; font-size:12px; }
 
   #debugbox{
@@ -620,9 +650,6 @@
 
   @media (prefers-reduced-motion: reduce){
     .overlay, button.playbtn{ transition:none; }
-  }
-  @media (pointer:coarse){
-    .kbd-hint{ display:none; }
   }
 </style>
 
@@ -665,7 +692,7 @@
               <kbd class="k-w">W</kbd><kbd class="k-a">A</kbd><kbd class="k-s">S</kbd><kbd class="k-d">D</kbd>
             </div>
           </div>
-          <p id="moveHowtoText" data-i18n-html>Move with <b>WASD</b> or arrow keys<span class="sub">or drag the joystick on touch screens</span></p>
+          <p id="moveHowtoText" data-i18n-html>Move with <b>WASD</b>, arrow keys, or left-click to walk there<span class="sub">or drag the joystick on touch screens</span></p>
         </div>
         <div class="howto-row">
           <div class="howto-icon bump-icon"><span class="bunny"></span><span class="bolt">⚔</span><span class="foe"></span></div>
@@ -673,7 +700,7 @@
         </div>
         <div class="howto-row">
           <div class="howto-icon dash-icon"><span class="streak short"></span><span class="streak"></span><span class="bunny2"></span></div>
-          <p id="dashHowtoText" data-i18n-html><b>Space, left-click, or the DASH button</b> to dash<span class="sub">a quick invulnerable burst - great for closing in on ranged enemies</span></p>
+          <p id="dashHowtoText" data-i18n-html><b>Space, double-click, or the DASH button</b> to dash<span class="sub">a quick invulnerable burst - great for closing in on ranged enemies</span></p>
         </div>
         <div class="howto-row">
           <div class="howto-icon"><div class="stairs-icon"><i></i></div></div>
@@ -711,6 +738,11 @@
 
     <div class="overlay" id="ov-inventory" hidden>
       <h1 data-i18n-html>Hero &amp; Gear</h1>
+      <div class="inv-tabs" id="invTabs">
+        <button type="button" class="inv-tab" data-tab="stats" data-i18n>Stats</button>
+        <button type="button" class="inv-tab" data-tab="equipment" data-i18n>Equipment</button>
+        <button type="button" class="inv-tab" data-tab="abilities" data-i18n>Abilities</button>
+      </div>
       <div class="inv-wrap" id="invWrap"></div>
       <button class="playbtn" id="btnInventoryClose" data-i18n>Close</button>
     </div>
@@ -775,7 +807,11 @@
   <div class="hud">
     <div class="hearts"><canvas id="heartsCanvas" width="180" height="18"></canvas></div>
     <div class="floorlabel"><span data-i18n>FLOOR</span> <b id="floorNum">1</b>/15</div>
-    <div class="goldwrap"><span class="coin"></span><span id="goldval">0</span></div>
+    <div class="hud-right">
+      <div class="goldwrap"><span class="coin"></span><span id="goldval">0</span></div>
+      <div class="shardwrap"><span class="shard"></span><span id="shardsHud">0</span></div>
+      <button id="inv" class="hud-inv-btn" title="Hero &amp; gear (I)" aria-label="Hero and gear" data-i18n-title data-i18n-aria>🎒</button>
+    </div>
   </div>
   <div class="loadout"><span id="className">Warrior</span><span class="loadoutsep">·</span><span id="weaponName">Sword</span><span class="loadoutsep">·</span><span id="armorName">Traveler's Garb</span></div>
   <span class="xplabel"><span data-i18n>Lv.</span><span id="levelVal">1</span></span>
@@ -783,8 +819,6 @@
   <div class="below">
     <span id="toast"></span>
     <span class="controls">
-      <span class="kbd-hint"><kbd>WASD</kbd> <span data-i18n>move</span></span>
-      <button id="inv" title="Hero &amp; gear (I)" aria-label="Hero and gear" data-i18n-title data-i18n-aria>🎒</button>
       <button id="help" title="How to play" aria-label="How to play" data-i18n-title data-i18n-aria>?</button>
       <button id="mute" title="Toggle sound" aria-label="Toggle sound" data-i18n-title data-i18n-aria>🔊</button>
     </span>
@@ -884,10 +918,10 @@ const I18N = {
   "DASH": "衝刺",
   // -- howto --
   "How to Play": "遊戲玩法",
-  "Move with <b>WASD</b> or arrow keys<span class=\"sub\">or drag the joystick on touch screens</span>": "使用 <b>WASD</b> 或方向鍵移動<span class=\"sub\">觸控裝置可拖曳搖桿移動</span>",
+  "Move with <b>WASD</b>, arrow keys, or left-click to walk there<span class=\"sub\">or drag the joystick on touch screens</span>": "使用 <b>WASD</b>、方向鍵，或點擊左鍵走到該處<span class=\"sub\">觸控裝置可拖曳搖桿移動</span>",
   "Drag the joystick to move<span class=\"sub\">it appears bottom-left once you start</span>": "拖曳搖桿以移動<span class=\"sub\">開始遊戲後會出現在左下角</span>",
   "Get close and you <b>attack automatically</b><span class=\"sub\">no attack button - range and arc depend on your weapon</span>": "靠近敵人即會<b>自動攻擊</b><span class=\"sub\">沒有攻擊鍵，攻擊距離與範圍取決於你的武器</span>",
-  "<b>Space, left-click, or the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "按<b>空白鍵、滑鼠左鍵或衝刺鍵</b>來衝刺<span class=\"sub\">短暫無敵的快速位移，很適合欺身接近遠程敵人</span>",
+  "<b>Space, double-click, or the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "按<b>空白鍵、滑鼠左鍵點兩下或衝刺鍵</b>來衝刺<span class=\"sub\">短暫無敵的快速位移，很適合欺身接近遠程敵人</span>",
   "<b>Tap the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "點按<b>衝刺鍵</b>來衝刺<span class=\"sub\">短暫無敵的快速位移，很適合欺身接近遠程敵人</span>",
   "Find the <b>glowing stairs</b> to descend<span class=\"sub\">15 floors, 3 realms, each with a boss - merchants sell weapons, armor &amp; potions along the way</span>": "找到<b>發光的樓梯</b>以下樓<span class=\"sub\">共15層、3個領域，每個領域皆有首領－商人會沿途販售武器、護甲與藥水</span>",
   "Press <b>I</b> or the backpack button for your <b>hero &amp; gear</b> screen<span class=\"sub\">stats, equipment, and every ability you've picked</span>": "按下 <b>I</b> 鍵或背包鍵開啟<b>英雄與裝備</b>畫面<span class=\"sub\">查看數值、裝備，以及你選擇過的每個能力</span>",
@@ -923,6 +957,7 @@ const I18N = {
   "Hero &amp; Gear": "英雄與裝備",
   "Close": "關閉",
   "Hero Stats": "英雄數值",
+  "Stats": "數值",
   "{0} the {1}": "{1}{0}",
   "HP": "生命值",
   "Gold": "金幣",
@@ -1074,10 +1109,10 @@ const I18N = {
   "DASH": "冲刺",
   // -- howto --
   "How to Play": "游戏玩法",
-  "Move with <b>WASD</b> or arrow keys<span class=\"sub\">or drag the joystick on touch screens</span>": "使用 <b>WASD</b> 或方向键移动<span class=\"sub\">触控设备可拖动摇杆移动</span>",
+  "Move with <b>WASD</b>, arrow keys, or left-click to walk there<span class=\"sub\">or drag the joystick on touch screens</span>": "使用 <b>WASD</b>、方向键，或点击左键走到该处<span class=\"sub\">触控设备可拖动摇杆移动</span>",
   "Drag the joystick to move<span class=\"sub\">it appears bottom-left once you start</span>": "拖动摇杆以移动<span class=\"sub\">开始游戏后会出现在左下角</span>",
   "Get close and you <b>attack automatically</b><span class=\"sub\">no attack button - range and arc depend on your weapon</span>": "靠近敌人即会<b>自动攻击</b><span class=\"sub\">没有攻击键，攻击距离与范围取决于你的武器</span>",
-  "<b>Space, left-click, or the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "按<b>空格键、鼠标左键或冲刺键</b>来冲刺<span class=\"sub\">短暂无敌的快速位移，很适合欺身接近远程敌人</span>",
+  "<b>Space, double-click, or the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "按<b>空格键、鼠标左键点两下或冲刺键</b>来冲刺<span class=\"sub\">短暂无敌的快速位移，很适合欺身接近远程敌人</span>",
   "<b>Tap the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "点按<b>冲刺键</b>来冲刺<span class=\"sub\">短暂无敌的快速位移，很适合欺身接近远程敌人</span>",
   "Find the <b>glowing stairs</b> to descend<span class=\"sub\">15 floors, 3 realms, each with a boss - merchants sell weapons, armor &amp; potions along the way</span>": "找到<b>发光的楼梯</b>以下楼<span class=\"sub\">共15层、3个领域，每个领域皆有首领－商人会沿途贩售武器、护甲与药水</span>",
   "Press <b>I</b> or the backpack button for your <b>hero &amp; gear</b> screen<span class=\"sub\">stats, equipment, and every ability you've picked</span>": "按下 <b>I</b> 键或背包键开启<b>英雄与装备</b>画面<span class=\"sub\">查看数值、装备，以及你选择过的每个能力</span>",
@@ -1113,6 +1148,7 @@ const I18N = {
   "Hero &amp; Gear": "英雄与装备",
   "Close": "关闭",
   "Hero Stats": "英雄数值",
+  "Stats": "数值",
   "{0} the {1}": "{1}{0}",
   "HP": "生命值",
   "Gold": "金币",
@@ -1772,11 +1808,16 @@ function playerParts(weaponType, armorKey, facingDir, animalId){
   const headGrid = facingDir==="back" ? SPRITES.headBack : facingDir==="side" ? SPRITES.headSide : SPRITES.head;
   const earGrid = SPRITES[animal.earSprite] || SPRITES.earBunny;
   const eb = animal.earBox;
+  // in side profile both ears sweep back together (away from the muzzle, which pokes out the
+  // front/right of headSide) instead of sitting spread apart the way they do face-on
+  const sideView = facingDir==="side";
+  const earLX = sideView ? -1.9 : -2.5;
+  const earRX = sideView ? -0.9 : 0.4;
   const parts = [
     // ears (shape + length vary per animal; anchored at the same base point so shorter
     // ears - bear, cat - just don't reach as high as the bunny's)
-    {x:-2.5,y:11,w:eb.w,h:eb.h,sprite:{grid:earGrid,palette:pal}, group:"earL"},
-    {x:0.4,y:11,w:eb.w,h:eb.h,sprite:{grid:earGrid,palette:pal}, group:"earR"},
+    {x:earLX,y:11,w:eb.w,h:eb.h,sprite:{grid:earGrid,palette:pal}, group:"earL"},
+    {x:earRX,y:11,w:eb.w,h:eb.h,sprite:{grid:earGrid,palette:pal}, group:"earR"},
     // head (back-of-head, faceless, when walking away from the camera)
     {x:-2.7,y:6.0,w:5.4,h:5.6,sprite:{grid:headGrid,palette:pal}},
     // body
@@ -2365,7 +2406,7 @@ function newPlayer(classId, animalId){
     baseMaxHp:BASE_MAX_HP,weapon:(cls&&cls.weapon)||"sword",armor:"traveler",
     classId: classId||null, animalId: ANIMALS[animalId] ? animalId : "bunny",
     animT:0,moving:false,hurtTimer:0,invuln:0,
-    moveDirX:1,moveDirY:0,dashT:0,dashCd:0,dashDirX:1,dashDirY:0,
+    moveDirX:1,moveDirY:0,dashT:0,dashCd:0,dashDirX:1,dashDirY:0,moveTarget:null,
     attackTimer:0,attackCd:0,swingAngle:0,swingHasHit:false,
     gold:0,dying:false,dieT:0,bossesDefeatedThisRun:0,cardsChosen:[],
     xp:0,level:1,xpToNext:6,pickupRadius:18,regenAccum:0,
@@ -2461,8 +2502,28 @@ window.addEventListener("keyup", e=>{ keys[e.key.toLowerCase()]=false; });
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
+// converts a mouse event's page-space click into world-space coordinates, accounting for
+// the canvas's responsive CSS scaling (its internal resolution is fixed at VIEWW x VIEWH
+// but it's displayed at whatever size the layout gives it) and the current camera offset
+function canvasToWorld(clientX, clientY){
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width/rect.width, scaleY = canvas.height/rect.height;
+  return { x:(clientX-rect.left)*scaleX + camX, y:(clientY-rect.top)*scaleY + camY };
+}
+// left-click sets a click-to-move destination (cancelled by any WASD/joystick input, or once
+// reached - see update()); a quick second click (native dblclick) escalates to a dash aimed
+// at that same point instead of just walking there
 canvas.addEventListener("mousedown", e=>{
-  if(e.button===0) triggerDash();
+  if(e.button!==0 || state!=="playing" || !player) return;
+  player.moveTarget = canvasToWorld(e.clientX, e.clientY);
+});
+canvas.addEventListener("dblclick", e=>{
+  if(e.button!==0 || state!=="playing" || !player) return;
+  const pt = canvasToWorld(e.clientX, e.clientY);
+  const ddx = pt.x-player.x, ddy = pt.y-player.y;
+  const dlen = Math.hypot(ddx,ddy)||1;
+  player.moveTarget = null;
+  triggerDash(ddx/dlen, ddy/dlen);
 });
 
 function startGame(classId){
@@ -2796,7 +2857,8 @@ document.getElementById("btnShopLeave").addEventListener("click", ()=>{
   updateTouchControls();
 });
 
-/* ---------- inventory (hero stats, equipment, abilities) ---------- */
+/* ---------- inventory (hero stats, equipment, abilities - 3 tabs) ---------- */
+let activeInvTab = "stats";
 function openInventory(){
   if(state!=="playing" || !player) return; // only mid-run, and not over another overlay
   state = "inventory";
@@ -2812,9 +2874,7 @@ function closeInventory(){
 function invStatRow(label, val){
   return `<div class="inv-stat"><span class="inv-stat-label">${T(label)}</span><span class="inv-stat-val">${val}</span></div>`;
 }
-function buildInventoryOverlay(){
-  const wrap = document.getElementById("invWrap");
-  wrap.innerHTML = "";
+function buildInvStatsTab(wrap){
   const cls = CLASSES[player.classId];
   const animal = ANIMALS[player.animalId] || ANIMALS.bunny;
   const armor = getArmor();
@@ -2828,7 +2888,7 @@ function buildInventoryOverlay(){
   const heroSec = document.createElement("div");
   heroSec.className = "inv-section";
   heroSec.innerHTML =
-    `<div class="inv-heading">${T("Hero Stats")}${cls?` &mdash; ${Tf("{0} the {1}", T(cls.name), T(animal.name))}`:""}</div>` +
+    `<div class="inv-heading">${cls?Tf("{0} the {1}", T(cls.name), T(animal.name)):T("Hero Stats")}</div>` +
     `<div class="inv-stat-grid">` +
       invStatRow("Level", player.level) +
       invStatRow("HP", `${Math.max(0,Math.ceil(player.hp))} / ${player.maxhp}`) +
@@ -2844,7 +2904,10 @@ function buildInventoryOverlay(){
       invStatRow("Pickup Radius", Math.round(player.pickupRadius)) +
     `</div>`;
   wrap.appendChild(heroSec);
-
+}
+function buildInvEquipmentTab(wrap){
+  const animal = ANIMALS[player.animalId] || ANIMALS.bunny;
+  const armor = getArmor();
   const gearSec = document.createElement("div");
   gearSec.className = "inv-section";
   gearSec.innerHTML = `<div class="inv-heading">${T("Equipment")}</div>`;
@@ -2865,7 +2928,8 @@ function buildInventoryOverlay(){
     `</div>`;
   gearSec.appendChild(gearList);
   wrap.appendChild(gearSec);
-
+}
+function buildInvAbilitiesTab(wrap){
   const abilSec = document.createElement("div");
   abilSec.className = "inv-section";
   const chosen = (player.cardsChosen||[]).map(id=>findCardById(id)).filter(Boolean);
@@ -2888,6 +2952,22 @@ function buildInventoryOverlay(){
   abilSec.appendChild(abilList);
   wrap.appendChild(abilSec);
 }
+function buildInventoryOverlay(){
+  document.querySelectorAll(".inv-tab").forEach(btn=>{
+    btn.classList.toggle("selected", btn.dataset.tab===activeInvTab);
+  });
+  const wrap = document.getElementById("invWrap");
+  wrap.innerHTML = "";
+  if(activeInvTab==="equipment") buildInvEquipmentTab(wrap);
+  else if(activeInvTab==="abilities") buildInvAbilitiesTab(wrap);
+  else buildInvStatsTab(wrap);
+}
+document.querySelectorAll(".inv-tab").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    activeInvTab = btn.dataset.tab;
+    buildInventoryOverlay();
+  });
+});
 document.getElementById("inv").addEventListener("click", openInventory);
 document.getElementById("btnInventoryClose").addEventListener("click", closeInventory);
 
@@ -3165,10 +3245,13 @@ function moveWithCollision(ent, dx, dy){
 // a short burst of movement (2 tiles) toward whatever direction the player last moved,
 // with brief invulnerability - lets melee builds punch through a ranged enemy's volley
 // to close the distance instead of only having a slow walk to work with
-function triggerDash(){
+// dirX/dirY optionally override the dash direction (e.g. toward a double-click point);
+// with neither given it falls back to the last movement direction, or facing if idle
+function triggerDash(dirX, dirY){
   if(state!=="playing" || !player || player.dying) return;
   if(player.dashCd>0 || player.dashT>0) return;
-  let dx = player.moveDirX||0, dy = player.moveDirY||0;
+  let dx = dirX!=null ? dirX : (player.moveDirX||0);
+  let dy = dirY!=null ? dirY : (player.moveDirY||0);
   if(dx===0 && dy===0){ dx = player.facing; dy = 0; }
   const len = Math.hypot(dx,dy)||1;
   player.dashDirX = dx/len; player.dashDirY = dy/len;
@@ -3189,13 +3272,21 @@ function update(dt){
     return;
   }
 
-  // input (keyboard + virtual joystick)
+  // input (keyboard + virtual joystick + click-to-move)
   let mx=0,my=0;
   if(keys["a"]||keys["arrowleft"]) mx-=1;
   if(keys["d"]||keys["arrowright"]) mx+=1;
   if(keys["w"]||keys["arrowup"]) my-=1;
   if(keys["s"]||keys["arrowdown"]) my+=1;
   mx += joyVec.x; my += joyVec.y;
+  if(mx!==0 || my!==0){
+    player.moveTarget = null; // any manual input cancels a pending click-to-move order
+  } else if(player.moveTarget){
+    const tdx = player.moveTarget.x-player.x, tdy = player.moveTarget.y-player.y;
+    const tdist = Math.hypot(tdx,tdy);
+    if(tdist < 6) player.moveTarget = null;
+    else { mx = tdx/tdist; my = tdy/tdist; }
+  }
   const rawLen = Math.hypot(mx,my);
   const moving = rawLen > 0.08;
   player.moving = moving && player.attackTimer<=0;
@@ -4102,6 +4193,7 @@ function renderHUDCanvas(){
   }
   document.getElementById("floorNum").textContent = floorNum;
   document.getElementById("goldval").textContent = player? player.gold : 0;
+  document.getElementById("shardsHud").textContent = meta.shards;
   document.getElementById("weaponName").textContent = T((WEAPONS[player&&player.weapon] || WEAPONS.sword).short);
   document.getElementById("armorName").textContent = T((ARMOR_SETS[player&&player.armor] || ARMOR_SETS.traveler).name);
   const animalName = (player && ANIMALS[player.animalId] && T(ANIMALS[player.animalId].name)) || "";
