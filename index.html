@@ -320,6 +320,29 @@
   .class-weaponname{ font-family:"Silkscreen",monospace; font-size:8.5px; color:var(--amber); }
   .class-desc{ font-size:10px; color:var(--lavender); line-height:1.3; }
 
+  .animal-row{
+    display:flex; gap:8px; flex-wrap:wrap; justify-content:center;
+    width:100%; max-width:440px; margin:2px 0;
+  }
+  .animal-card{
+    font:inherit; text-align:center; color:inherit;
+    -webkit-appearance:none; appearance:none;
+    background:rgba(246,236,217,.08);
+    border:2px solid rgba(246,236,217,.2);
+    border-radius:14px;
+    padding:6px 8px 7px;
+    cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    transition:transform .08s ease, background .15s ease, border-color .15s ease;
+  }
+  .animal-card:hover{ background:rgba(246,236,217,.16); transform:translateY(-2px); }
+  .animal-card:active{ transform:translateY(0); }
+  .animal-card:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
+  .animal-card.selected{ border-color:var(--amber); background:rgba(245,185,66,.16); }
+  .animal-icon-canvas{ width:32px; height:32px; image-rendering:auto; }
+  .animal-name{ font-size:11px; font-weight:800; color:var(--parchment); }
+  .animal-perk{ font-size:9px; color:var(--amber); line-height:1.25; max-width:80px; }
+
   .secondarybtn{
     font-family:"Baloo 2",sans-serif; font-weight:700; font-size:12px;
     background:transparent; color:var(--lavender);
@@ -519,7 +542,7 @@
         </div>
         <div class="howto-row">
           <div class="howto-icon"><div class="shop-icon-bow"></div></div>
-          <p>Next, pick a <b>class</b> - Warrior, Mage, Ranger or Monk<span class="sub">each starts with its own weapon and level-up cards</span></p>
+          <p>Next, pick your <b>look</b> and <b>class</b><span class="sub">each animal grants a small perk; each class starts with its own weapon and level-up cards</span></p>
         </div>
         <div class="howto-row">
           <div class="howto-icon"><div class="mini-joy"></div></div>
@@ -550,8 +573,9 @@
     </div>
 
     <div class="overlay" id="ov-classselect" hidden>
-      <h1>Choose Your Class</h1>
-      <p>Each class starts with a signature weapon and unlocks its own level-up cards for the run.</p>
+      <h1>Choose Your Look &amp; Class</h1>
+      <p>Each animal grants a small perk; each class starts with a signature weapon and unlocks its own level-up cards for the run.</p>
+      <div class="animal-row" id="animalRow"></div>
       <div class="class-grid" id="classGrid"></div>
     </div>
 
@@ -793,11 +817,18 @@ const COL = {
    s=shadow, with extra bespoke letters per sprite for secondary materials (eyes, trim, etc). */
 const SPRITES = {
   // ---- player (shared rig, recolored per-part by playerBodyPalette) ----
-  head: ["..dddddd..",".dFFFFFFd.","dFFFFFFFFd","dFfffffffd","dffffffffd","dfeffffefd","dfkffffkfd","dsffffffsd",".dssssssd.","..dssssd.."],
+  // "m" cells sit where a raccoon's mask band shows - for every other animal "m" is mapped
+  // to the same color as the surrounding fur so it's invisible (see playerBodyPalette).
+  head: ["..dddddd..",".dFFFFFFd.","dFFFFFFFFd","dFfffffffd","dmffffffmd","dmemmmmemd","dfkffffkfd","dsffffffsd",".dssssssd.","..dssssd.."],
   // back-of-head: same silhouette as "head" but faceless, with a center hair-part seam -
   // shown when the player walks up/away from the camera (see playerParts's facingDir)
   headBack: ["..dddddd..",".dFFFFFFd.","dFFFFFFFFd","dFfffffffd","dffffffffd","dfffsffffd","dfffsffffd","dsffffffsd",".dssssssd.","..dssssd.."],
-  ear:  [".dd.","dFFd","dFFd","dffd","dffd","dkkd","dssd",".dd."],
+  // ear shapes - one per animal, all drawn in the same fur/highlight/shadow/blush tones
+  earBunny: [".dd.","dFFd","dFFd","dffd","dffd","dkkd","dssd",".dd."],
+  earFox:   [".DD.",".DD.","dffd","dffd","dkkd",".dd."],
+  earCat:   [".dd.","dffd","dffd","dkkd",".dd."],
+  earBear:  [".dd.","dFfd","dffd",".dd."],
+  earRaccoon:[".DD.","dffd","dffd","dkkd",".dd."],
   torso:[".jjjjjj.","jrrrrrrj","jJJJJJJj","jJuuuuJj","juuuuuuj","juuuuuuj","jvvvvvvj",".jvvvvj."],
   arm:  ["dFd","dfd","dfd","dfd","dsd",".d."],
   leg:  ["qQq","qoq","qoq","qoq","qoq","qwq",".q."],
@@ -847,10 +878,12 @@ const WEAPON_SPRITES = {
   gauntlets: { grid:[".GG.","GggG","GggG",".oo."],
     palette:{G:"#e8c96a",g:"#cfae4a",o:"#8a6a1a"} },
 };
-function playerBodyPalette(){
-  const fur = tonesFrom(COL.fur), tunic = tonesFrom(COL.tunic), boot = tonesFrom(COL.boots);
+function playerBodyPalette(animalId){
+  const animal = ANIMALS[animalId] || ANIMALS.bunny;
+  const fur = tonesFrom(animal.furColor), tunic = tonesFrom(COL.tunic), boot = tonesFrom(COL.boots);
   return {
     d:fur.out, F:fur.hi, f:fur.base, s:fur.sh, e:COL.ink, k:COL.pink,
+    m:animal.maskColor || fur.base, D:"#2a1e30",
     j:tunic.out, J:tunic.hi, u:tunic.base, v:tunic.sh, r:"#ffd0dc",
     q:boot.out, Q:boot.hi, o:boot.base, w:boot.sh,
   };
@@ -1029,6 +1062,23 @@ const CLASSES = {
     ]},
 };
 
+/* ---------- animals ----------
+   A purely cosmetic-plus-a-perk choice, independent of class: any class can be any animal.
+   Each swaps fur color and ear shape (see playerBodyPalette/playerParts) and grants one
+   small passive bonus applied once at character creation, alongside the class/skill mods. */
+const ANIMALS = {
+  bunny: { id:"bunny", name:"Bunny", furColor:"#f7ede2", earSprite:"earBunny", earBox:{w:2.1,h:5.0},
+    perkDesc:"+12% move speed", apply:p=>{ p.mods.moveSpeedMult*=1.12; } },
+  fox: { id:"fox", name:"Fox", furColor:"#e08a4a", earSprite:"earFox", earBox:{w:2.1,h:3.6},
+    perkDesc:"+15% gold gained", apply:p=>{ p.mods.goldMult*=1.15; } },
+  cat: { id:"cat", name:"Cat", furColor:"#b9b0c7", earSprite:"earCat", earBox:{w:2.1,h:3.0},
+    perkDesc:"+10% double-hit chance", apply:p=>{ p.mods.doubleHitChance+=0.10; } },
+  bear: { id:"bear", name:"Bear", furColor:"#8a5c3a", earSprite:"earBear", earBox:{w:2.1,h:2.4},
+    perkDesc:"+2 max HP", apply:p=>{ p.baseMaxHp+=2; } },
+  raccoon: { id:"raccoon", name:"Raccoon", furColor:"#9a9aa2", earSprite:"earRaccoon", earBox:{w:2.1,h:3.0}, maskColor:"#3a2b3f",
+    perkDesc:"+25% pickup radius", apply:p=>{ p.pickupRadius*=1.25; } },
+};
+
 function fillSoftRect(ctx, x, y, w, h){
   const r = Math.min(2.2, w/2, h/2);
   if(r>0.3 && typeof ctx.roundRect==="function"){
@@ -1097,13 +1147,17 @@ function weaponSwingPose(style, p){
   }
 }
 
-function playerParts(weaponType, armorKey, facingDir){
-  const pal = playerBodyPalette();
+function playerParts(weaponType, armorKey, facingDir, animalId){
+  const animal = ANIMALS[animalId] || ANIMALS.bunny;
+  const pal = playerBodyPalette(animalId);
   const headGrid = facingDir==="back" ? SPRITES.headBack : SPRITES.head;
+  const earGrid = SPRITES[animal.earSprite] || SPRITES.earBunny;
+  const eb = animal.earBox;
   const parts = [
-    // ears
-    {x:-2.5,y:11,w:2.1,h:5.0,sprite:{grid:SPRITES.ear,palette:pal}, group:"earL"},
-    {x:0.4,y:11,w:2.1,h:5.0,sprite:{grid:SPRITES.ear,palette:pal}, group:"earR"},
+    // ears (shape + length vary per animal; anchored at the same base point so shorter
+    // ears - bear, cat - just don't reach as high as the bunny's)
+    {x:-2.5,y:11,w:eb.w,h:eb.h,sprite:{grid:earGrid,palette:pal}, group:"earL"},
+    {x:0.4,y:11,w:eb.w,h:eb.h,sprite:{grid:earGrid,palette:pal}, group:"earR"},
     // head (back-of-head, faceless, when walking away from the camera)
     {x:-2.7,y:6.0,w:5.4,h:5.6,sprite:{grid:headGrid,palette:pal}},
     // body
@@ -1250,7 +1304,7 @@ function drawCreature(ctx, kind, ent, camx, camy){
     }
 
     squashX *= 1+idleBob*0.02; squashY *= 1-idleBob*0.02;
-    drawParts(ctx, playerParts(ent.weapon, ent.armor, ent.facingDir), sx, sy - bob*0.3, {
+    drawParts(ctx, playerParts(ent.weapon, ent.armor, ent.facingDir, ent.animalId), sx, sy - bob*0.3, {
       flip: ent.facing<0, groupOffset, sx:squashX, sy:squashY,
       flash: ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)) : 0,
       alpha: ent.dying? Math.max(0,1-ent.dieT/0.5) : 1,
@@ -1378,6 +1432,7 @@ function saveRun(){
     const data = {
       floorNum,
       classId: player.classId||null,
+      animalId: player.animalId||"bunny",
       weapon: player.weapon, armor: player.armor,
       gold: player.gold, hp: player.hp,
       level: player.level, xp: player.xp, xpToNext: player.xpToNext,
@@ -1403,7 +1458,7 @@ function continueRun(){
   const saved = loadSavedRun();
   if(!saved) return;
   Audio1.unlock();
-  player = newPlayer(CLASSES[saved.classId] ? saved.classId : null);
+  player = newPlayer(CLASSES[saved.classId] ? saved.classId : null, saved.animalId);
   (saved.cardsChosen||[]).forEach(id=>{
     const card = findCardById(id);
     if(card) card.apply(player);
@@ -1639,12 +1694,12 @@ function makeEnemy(type,x,y,bossKind){
 }
 
 /* ---------- player ---------- */
-function newPlayer(classId){
+function newPlayer(classId, animalId){
   const cls = CLASSES[classId] || null;
   const p = {
     x:0,y:0,facing:1,facingDir:"front",radius:11,speed:172,
     baseMaxHp:BASE_MAX_HP,weapon:(cls&&cls.weapon)||"sword",armor:"traveler",
-    classId: classId||null,
+    classId: classId||null, animalId: ANIMALS[animalId] ? animalId : "bunny",
     animT:0,moving:false,hurtTimer:0,invuln:0,
     attackTimer:0,attackCd:0,swingAngle:0,swingHasHit:false,
     gold:0,dying:false,dieT:0,bossesDefeatedThisRun:0,cardsChosen:[],
@@ -1656,6 +1711,7 @@ function newPlayer(classId){
       styleDmgMult:{},styleCdMult:{},styleRangeMult:{},staffPierce:false,multishotChance:0,
     },
   };
+  (ANIMALS[p.animalId] || ANIMALS.bunny).apply(p);
   applyMetaUpgrades(p);
   p.maxhp = p.baseMaxHp + (ARMOR_SETS[p.armor].maxHpBonus||0);
   p.hp = p.maxhp;
@@ -1732,7 +1788,7 @@ ctx.imageSmoothingEnabled = false;
 
 function startGame(classId){
   Audio1.unlock();
-  player = newPlayer(classId);
+  player = newPlayer(classId, selectedAnimal);
   floorNum = 1;
   particles = []; dmgNums = []; projectiles = [];
   spawnFloor();
@@ -1780,9 +1836,36 @@ function showOverlay(id){
 }
 
 /* ---------- class selection (before every fresh run) ---------- */
+let selectedAnimal = "bunny";
 function openClassSelect(){
+  buildAnimalRow();
   buildClassSelect();
   showOverlay("ov-classselect");
+}
+function buildAnimalRow(){
+  const row = document.getElementById("animalRow");
+  row.innerHTML = "";
+  Object.values(ANIMALS).forEach(animal=>{
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "animal-card" + (animal.id===selectedAnimal ? " selected" : "");
+    btn.setAttribute("aria-pressed", animal.id===selectedAnimal ? "true" : "false");
+    btn.innerHTML =
+      `<canvas class="animal-icon-canvas" width="32" height="32"></canvas>` +
+      `<div class="animal-name">${animal.name}</div>` +
+      `<div class="animal-perk">${animal.perkDesc}</div>`;
+    btn.addEventListener("click", ()=>{ selectedAnimal = animal.id; buildAnimalRow(); });
+    row.appendChild(btn);
+    drawAnimalIcon(btn.querySelector(".animal-icon-canvas").getContext("2d"), animal.id);
+  });
+}
+function drawAnimalIcon(ctx, animalId){
+  const animal = ANIMALS[animalId] || ANIMALS.bunny;
+  const pal = playerBodyPalette(animalId);
+  const earGrid = SPRITES[animal.earSprite] || SPRITES.earBunny;
+  drawPixelSprite(ctx, earGrid, pal, 3, 2, 8, 11);
+  drawPixelSprite(ctx, earGrid, pal, 21, 2, 8, 11);
+  drawPixelSprite(ctx, SPRITES.head, pal, 6, 9, 20, 20);
 }
 function buildClassSelect(){
   const grid = document.getElementById("classGrid");
@@ -2900,7 +2983,9 @@ function renderHUDCanvas(){
   document.getElementById("goldval").textContent = player? player.gold : 0;
   document.getElementById("weaponName").textContent = (WEAPONS[player&&player.weapon] || WEAPONS.sword).short;
   document.getElementById("armorName").textContent = (ARMOR_SETS[player&&player.armor] || ARMOR_SETS.traveler).name;
-  document.getElementById("className").textContent = (player && CLASSES[player.classId] && CLASSES[player.classId].name) || "Adventurer";
+  const animalName = (player && ANIMALS[player.animalId] && ANIMALS[player.animalId].name) || "";
+  const className = (player && CLASSES[player.classId] && CLASSES[player.classId].name) || "Adventurer";
+  document.getElementById("className").textContent = animalName ? `${animalName} ${className}` : className;
   document.getElementById("levelVal").textContent = player? player.level : 1;
   const xpPct = player ? clamp((player.xp/player.xpToNext)*100, 0, 100) : 0;
   document.getElementById("xpFill").style.width = xpPct + "%";
