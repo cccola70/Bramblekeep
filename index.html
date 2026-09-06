@@ -1608,8 +1608,8 @@ function drawParts(ctx, parts, ox, oy, opts){
     const w = p.w * U, h = p.h * U;
     const rot = (off && off.rot) || 0;
     const drawIt = ()=>{
-      if(p.sprite){
-        drawPixelSprite(ctx, p.sprite.grid, p.sprite.palette, x, -y-h, Math.max(1,w), Math.max(1,h), {flash:flashWhite});
+      if(p.shape){
+        drawPartShape(ctx, p.shape, x, -y-h, Math.max(0.5,w), Math.max(0.5,h), flashWhite);
       } else {
         ctx.fillStyle = flashWhite>0 ? towardsWhite(p.c, flashWhite) : p.c;
         fillSoftRect(ctx, x, -y-h, Math.max(1,w), Math.max(1,h));
@@ -1629,28 +1629,6 @@ function drawParts(ctx, parts, ox, oy, opts){
   }
   ctx.restore();
 }
-// Draws a small hand-authored pixel-art bitmap ("grid": array of equal-length strings,
-// one character per pixel, "." = transparent) scaled to fill a w x h box. Each character
-// looks itself up in "palette" (char -> hex). Used for every character/weapon/armor/tile
-// sprite so they read as real shaded pixel art instead of flat single-color rects.
-function drawPixelSprite(ctx, grid, palette, x, y, w, h, opts){
-  opts = opts || {};
-  const flash = opts.flash || 0;
-  const rows = grid.length, cols = grid[0].length;
-  const cw = w/cols, ch = h/rows;
-  for(let r=0;r<rows;r++){
-    const row = grid[r];
-    for(let c=0;c<cols;c++){
-      const key = row[c];
-      if(key===".") continue;
-      let color = palette[key];
-      if(!color) continue;
-      if(flash>0) color = towardsWhite(color, flash);
-      ctx.fillStyle = color;
-      ctx.fillRect(x + c*cw - 0.4, y + r*ch - 0.4, cw+0.8, ch+0.8);
-    }
-  }
-}
 // darkens a base hex toward black by a ratio - the shadow-tone sibling of towardsWhite(),
 // used to auto-derive shadow/highlight shades for recolorable sprites (e.g. armor sets
 // that share one shape but each need their own base color shaded consistently)
@@ -1667,6 +1645,114 @@ function shadeTone(hex, amt){
 function tonesFrom(hex){
   return { base:hex, hi:towardsWhite(hex,0.32), sh:shadeTone(hex,0.32), out:shadeTone(hex,0.62) };
 }
+// hex -> "rgba(r,g,b,a)" so a flat palette color can be used translucently (glows, blush,
+// slime bodies) without hand-writing a second rgba literal for every tone
+function hexA(hex, a){
+  if(!hex || hex[0]!=="#") return hex;
+  const n = parseInt(hex.slice(1),16);
+  return "rgba("+((n>>16)&255)+","+((n>>8)&255)+","+(n&255)+","+a+")";
+}
+
+/* ---------- smooth shape rendering ----------
+   Characters, enemies and props are drawn as soft vector shapes - ellipses, capsules and
+   smooth blob curves - filled with volumetric gradients rather than flat pixel cells, so a
+   body reads as a rounded, lit form instead of a stack of blocks. Every shape in the game is
+   lit from the same direction (LIGHT), so highlights and cast shadows agree everywhere.
+   Shapes slot into the existing part-rig: a part still carries its {x,y,w,h} box in unit
+   space, and "shape" just describes what gets drawn inside that box - so all the animation
+   (group offsets, swing rotation, flip, squash, hurt flash, death fade) keeps working. */
+const LIGHT = { x:-0.45, y:-0.55 };
+
+// the gradient that turns a flat silhouette into a volume: a highlight offset toward the
+// light, the base tone through the middle, and shadow falling away on the far side
+function volumeFill(ctx, cx, cy, rx, ry, base, hiAmt, shAmt){
+  const r = Math.max(rx, ry);
+  const g = ctx.createRadialGradient(
+    cx + LIGHT.x*rx*0.5, cy + LIGHT.y*ry*0.5, Math.max(0.4, r*0.06),
+    cx, cy, r*1.15
+  );
+  g.addColorStop(0, towardsWhite(base, hiAmt!=null?hiAmt:0.4));
+  g.addColorStop(0.45, base);
+  g.addColorStop(1, shadeTone(base, shAmt!=null?shAmt:0.36));
+  return g;
+}
+// paints whichever path is currently on the context: volumetric fill, an optional glossy
+// highlight clipped inside the form, then a softer darker outline for an inked-art edge.
+// Very small shapes (eyes, fangs, studs) skip the gradient and gloss - at a couple of pixels
+// across the shading isn't visible anyway and it's a lot of gradients per frame to build.
+function paintPath(ctx, cx, cy, rx, ry, o){
+  const base = o.col || "#ffffff";
+  const tiny = Math.min(rx, ry) < 2.0;
+  ctx.save();
+  if(o.alpha!=null) ctx.globalAlpha *= o.alpha;
+  ctx.fillStyle = (o.flat || tiny) ? base : volumeFill(ctx, cx, cy, rx, ry, base, o.hi, o.sh);
+  ctx.fill();
+  if(o.gloss && !tiny){
+    ctx.save();
+    ctx.clip(); // keeps the highlight inside the silhouette, whatever its shape
+    const gx = cx + LIGHT.x*rx*0.5, gy = cy + LIGHT.y*ry*0.5, gr = Math.max(rx,ry)*0.66;
+    const gg = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
+    gg.addColorStop(0, "rgba(255,255,255,"+(0.55*o.gloss).toFixed(3)+")");
+    gg.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = gg;
+    ctx.fillRect(cx-rx-1, cy-ry-1, rx*2+2, ry*2+2);
+    ctx.restore();
+  }
+  if(o.outline!==false){
+    ctx.lineWidth = o.lw!=null ? o.lw : Math.max(0.55, Math.min(rx,ry)*0.16);
+    ctx.strokeStyle = o.olCol || shadeTone(base, o.ol!=null?o.ol:0.5);
+    ctx.lineJoin = "round";
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function shapeEllipsePath(ctx, x, y, w, h, rot){
+  ctx.beginPath();
+  ctx.ellipse(x+w/2, y+h/2, Math.max(0.3,w/2), Math.max(0.3,h/2), rot||0, 0, Math.PI*2);
+}
+function shapeRRectPath(ctx, x, y, w, h, rad){
+  const r = Math.max(0, Math.min(rad, w/2, h/2));
+  ctx.beginPath();
+  if(typeof ctx.roundRect==="function") ctx.roundRect(x, y, w, h, r);
+  else ctx.rect(x, y, w, h);
+}
+// a smooth closed curve through control points given in normalized (0..1) box coordinates -
+// for the organic silhouettes an ellipse can't express: wings, robes, tails, ghost skirts.
+// Curving through the midpoints between control points keeps it smooth with no cusps.
+function shapeBlobPath(ctx, x, y, w, h, pts){
+  ctx.beginPath();
+  if(!pts || pts.length<3){ ctx.rect(x,y,w,h); return; }
+  const P = pts.map(p=>({x:x+p[0]*w, y:y+p[1]*h}));
+  const first = P[0], last = P[P.length-1];
+  ctx.moveTo((last.x+first.x)/2, (last.y+first.y)/2);
+  for(let i=0;i<P.length;i++){
+    const cur = P[i], nxt = P[(i+1)%P.length];
+    ctx.quadraticCurveTo(cur.x, cur.y, (cur.x+nxt.x)/2, (cur.y+nxt.y)/2);
+  }
+  ctx.closePath();
+}
+// a soft emissive halo with no outline - wisps, staff orbs, lanterns, boss auras, the glow
+// under a torch. Drawn as one radial gradient that fades fully to transparent at the edge.
+function drawGlow(ctx, cx, cy, r, col, strength){
+  const a = strength!=null ? strength : 0.8;
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(0.5,r));
+  g.addColorStop(0, hexA(towardsWhite(col,0.6), a));
+  g.addColorStop(0.4, hexA(col, a*0.5));
+  g.addColorStop(1, hexA(col, 0));
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(cx, cy, Math.max(0.5,r), 0, Math.PI*2); ctx.fill();
+}
+// draws one shape part inside its box - the leaf of the part rig, called from drawParts
+function drawPartShape(ctx, s, x, y, w, h, flash){
+  const o = (flash>0 && s.col) ? Object.assign({}, s, {col:towardsWhite(s.col, flash)}) : s;
+  const cx = x+w/2, cy = y+h/2, rx = w/2, ry = h/2;
+  if(o.kind==="glow"){ drawGlow(ctx, cx, cy, Math.max(rx,ry), o.col, o.alpha); return; }
+  if(o.kind==="capsule") shapeRRectPath(ctx, x, y, w, h, Math.min(w,h)/2);
+  else if(o.kind==="rrect") shapeRRectPath(ctx, x, y, w, h, (o.r!=null?o.r:0.32)*Math.min(w,h));
+  else if(o.kind==="blob") shapeBlobPath(ctx, x, y, w, h, o.pts);
+  else shapeEllipsePath(ctx, x, y, w, h, o.rot);
+  paintPath(ctx, cx, cy, rx, ry, o);
+}
 
 /* ---------- creature templates ---------- */
 const COL = {
@@ -1679,108 +1765,6 @@ const COL = {
   ghost:"#e7defb", ghostDark:"#c9b8ee",
   boss:"#a558c9", bossDark:"#7a3c9c", crown:"#f5b942"
 };
-
-/* ---------- hand-authored pixel sprites ----------
-   Small ASCII-grid bitmaps drawn via drawPixelSprite(). Each grid uses "." for transparent
-   and otherwise-arbitrary single characters that are looked up in a palette object supplied
-   alongside the grid - the same grid can be recolored endlessly (armor sets, slime hues) by
-   swapping only the palette. Convention used throughout: o=outline, h=highlight, b=base,
-   s=shadow, with extra bespoke letters per sprite for secondary materials (eyes, trim, etc). */
-const SPRITES = {
-  // ---- player (shared rig, recolored per-part by playerBodyPalette) ----
-  // "m" cells sit where a raccoon's mask band shows - for every other animal "m" is mapped
-  // to the same color as the surrounding fur so it's invisible (see playerBodyPalette).
-  head: ["..dddddd..",".dFFFFFFd.","dFFFFFFFFd","dFfffffffd","dmffffffmd","dmemmmmemd","dfkffffkfd","dsffffffsd",".dssssssd.","..dssssd.."],
-  // back-of-head: same silhouette as "head" but faceless, with a center hair-part seam -
-  // shown when the player walks up/away from the camera (see playerParts's facingDir)
-  headBack: ["..dddddd..",".dFFFFFFd.","dFFFFFFFFd","dFfffffffd","dffffffffd","dfffsffffd","dfffsffffd","dsffffffsd",".dssssssd.","..dssssd.."],
-  // side profile: same cranium as "head" (unflipped = facing right, mirrored via ent.facing
-  // for facing left) with the far eye/blush hidden and a small muzzle bump poking out the
-  // right edge - shown when horizontal movement dominates (see computeFacingDir)
-  headSide: ["..dddddd...",".dFFFFFFd..","dFFFFFFFFd.","dFfffffffdf","dmffffffmdf","dmmmmmmemdd","dffffffkfd.","dsffffffsd.",".dssssssd..","..dssssd..."],
-  // ear shapes - one per animal, all drawn in the same fur/highlight/shadow/blush tones
-  earBunny: [".dd.","dFFd","dFFd","dffd","dffd","dkkd","dssd",".dd."],
-  earFox:   [".DD.",".DD.","dffd","dffd","dkkd",".dd."],
-  earCat:   [".dd.","dffd","dffd","dkkd",".dd."],
-  earBear:  [".dd.","dFfd","dffd",".dd."],
-  earRaccoon:[".DD.","dffd","dffd","dkkd",".dd."],
-  torso:[".jjjjjj.","jrrrrrrj","jJJJJJJj","jJuuuuJj","juuuuuuj","juuuuuuj","jvvvvvvj",".jvvvvj."],
-  arm:  ["dFd","dfd","dfd","dfd","dsd",".d."],
-  leg:  ["qQq","qoq","qoq","qoq","qoq","qwq",".q."],
-  // ---- armor (generic shapes, recolored per ARMOR_SETS entry) ----
-  helmet:  [".oooooo.","ohhhhhho","obbbbbbo"],
-  chest:   [".oooooo.","ohhhhhho","obbbbbbo","obbbbbbo","osssssso",".oooooo."],
-  shoulder:[".oo.","ohho",".oo."],
-  glove:   ["oho","obo",".o."],
-  shin:    [".oo.","ohho","obbo",".oo."],
-  // shield: worn on the off-hand by armor sets with hasShield:true (see playerParts) -
-  // a round kite shield with a bright boss/rim so it reads clearly even at small scale
-  shield:  [".ohho.","ohbbho","ohbbho","ohbbho","ohbbho",".ohho.","..oo.."],
-  // ---- enemies (recolored per hue/boss where noted) ----
-  slime: ["...oooo...",".ohhhhhho.","ohhhhbbbbo","obbccccbbo","obebbbbebo","osbbbbbbso",".osssssso.","...oooo..."],
-  // brute: a squat, stubby-legged rock/moss golem - shares slime's top half almost verbatim
-  // (same taper, same eye row) but ends in two flat "feet" instead of one tapered point,
-  // reading as heavier and grounded rather than an ooze - appears from floor 3 onward
-  brute: ["...oooo...",".ohhhhhho.","ohhhhbbbbo","obbccccbbo","obebbbbebo","obbbbbbbbo",".obssssbo.",".oo...oo.."],
-  batWingL: ["obbbb","ohhbb",".ohbb","..ob."],
-  batWingR: ["bbbbo","bbhho","bbho.",".bo.."],
-  batBody: [".o...o.","obo.obo","obbbbbo","obwbwbo","obbbbbo",".ossso."],
-  ratBody: [".o....o.","obbbbbbo","obebbbbo","obbbbbbo",".osssso."],
-  ghostBody: [".ohhhhhho.","ohhhhhhhho","obbbbbbbbo","obebbbbebo","obbbmmbbbo","osssssssso",".osssssso."],
-  ghostWave: ["oh","ob","ob","os"],
-  bossBody: [
-    "..ohhhhhho..",
-    ".ohhhhhhhho.",
-    "obbbbbbbbbbo",
-    "obbebbbbebbo",
-    "obbbmmmmbbbo",
-    "obbbbbbbbbbo",
-    "osssssssssso",
-    "obbbbbbbbbbo",
-    "obbbbbbbbbbo",
-    ".osssssssso.",
-    "..osssssso..",
-  ],
-  merchantRobe: ["..ohhho..",".ohhhhho.","obbbbbbbo","obbbbbbbo","obbbbbbbo","obbbbbbbo","ossssssso","obtttttbo",".ooooooo."],
-  // wisp: a small glowing orb enemy, recolored per biome (see wispParts) - a slow-moving
-  // ranged threat that keeps its distance and lobs projectiles instead of chasing to melee
-  wisp: ["..ohho..",".ohhhho.","ohhbbbho","ohbccbho","ohbccbho","ohhbbbho",".ohhhho.","..ohho.."],
-};
-// fixed (non-recolorable) sprite + palette pairs for weapons - each weapon has one look
-const WEAPON_SPRITES = {
-  sword: { grid:[".b.",".B.",".b.",".B.",".b.",".b.",".d.","ccc",".g.",".g.",".g.",".d."],
-    palette:{b:"#d9e1ea",B:"#f2f6fa",d:"#8a97a8",c:"#f5b942",g:"#7a4a30"} },
-  spear: { grid:[".t.","ttt","TTT",".t.",".w.",".w.",".W.",".w.",".w.",".W.",".w.",".w.",".W.",".w."],
-    palette:{t:"#e8eef2",T:"#ffffff",w:"#c9a86e",W:"#e0c48a"} },
-  axe: { grid:["HH...","HHh..","HHhh.",".hhh.","..g..","..g..","..G..","..g..","..g..","..o.."],
-    palette:{H:"#d3dae2",h:"#9aa7b5",g:"#8a5a44",G:"#a8735a",o:"#5a3d28"} },
-  hammer: { grid:["MMMMM","MmmmM","mmmmm","MmmmM","..g..","..g..","..G..","..g..","..g..","..o.."],
-    palette:{M:"#eef3f7",m:"#9aa7b5",g:"#8a5a44",G:"#a8735a",o:"#5a3d28"} },
-  staff: { grid:[".GG.","GggG",".gg.","..w.","..w.","..W.","..w.","..w.","..W.","..w.","..w.","..W.","..w.","..o."],
-    palette:{G:"#e6dcff",g:"#b19bff",w:"#5a3d28",W:"#7a5a3c",o:"#3a2814"} },
-  bow: { grid:["sbb.","s.bb","s..b","s..b","s.bb","s.b.","sgb.","sgb.","s.b.","s.bb","s..b","s..b","s.bb","sbb."],
-    palette:{s:"#e8eef2",b:"#8a5a44",g:"#5a3d28"} },
-  gauntlets: { grid:[".GG.","GggG","GggG",".oo."],
-    palette:{G:"#e8c96a",g:"#cfae4a",o:"#8a6a1a"} },
-  greatsword: { grid:[".bb.",".BB.",".bb.",".BB.",".bb.",".bb.",".bb.",".dd.","cccc",".gg.",".gg.",".gg.",".gg.",".dd."],
-    palette:{b:"#d9e1ea",B:"#f2f6fa",d:"#8a97a8",c:"#f5b942",g:"#5a3d28"} },
-  nunchaku: { grid:[".g.",".g.",".G.",".g.",".g.",".k.",".g.",".g.",".G.",".g.",".g."],
-    palette:{g:"#5a3d28",G:"#8a5a3a",k:"#2a2a2a"} },
-};
-function playerBodyPalette(animalId){
-  const animal = ANIMALS[animalId] || ANIMALS.bunny;
-  const fur = tonesFrom(animal.furColor), tunic = tonesFrom(COL.tunic), boot = tonesFrom(COL.boots);
-  return {
-    d:fur.out, F:fur.hi, f:fur.base, s:fur.sh, e:COL.ink, k:COL.pink,
-    m:animal.maskColor || fur.base, D:"#2a1e30",
-    j:tunic.out, J:tunic.hi, u:tunic.base, v:tunic.sh, r:"#ffd0dc",
-    q:boot.out, Q:boot.hi, o:boot.base, w:boot.sh,
-  };
-}
-function armorPalette(hex){
-  const t = tonesFrom(hex);
-  return { o:t.out, h:t.hi, b:t.base, s:t.sh };
-}
 
 /* ---------- weapons ---------- */
 const WEAPONS = {
@@ -1890,21 +1874,25 @@ function recalcMaxHp(){
 }
 function armorParts(key){
   const a = ARMOR_SETS[key] || ARMOR_SETS.traveler;
-  const helmetPal = armorPalette(a.helmet), chestPal = armorPalette(a.chest);
-  const glovePal = armorPalette(a.glove), shinPal = armorPalette(a.shin);
+  // metal-ish sets get a stronger specular than cloth/leather ones, so plate reads as plate
+  const shine = (a.hasShield || key==="kingsbane" || key==="bramble") ? 0.75 : 0.45;
   return [
-    // helmet: brow band, low enough to leave the face and ears clear
-    {x:-2.4,y:9.6,w:4.8,h:1.8,sprite:{grid:SPRITES.helmet,palette:helmetPal}},
-    // chest plate over the tunic, with shoulder pads that swing with the arms
-    {x:-2.3,y:1.8,w:4.6,h:3.8,sprite:{grid:SPRITES.chest,palette:chestPal}},
-    {x:-3.7,y:4.4,w:1.6,h:1.2,sprite:{grid:SPRITES.shoulder,palette:chestPal}, group:"armL"},
-    {x:2.1,y:4.4,w:1.6,h:1.2,sprite:{grid:SPRITES.shoulder,palette:chestPal}, group:"armR"},
+    // helmet: a cap over the crown, low enough to leave the face and ears clear
+    {x:-2.55, y:9.15, w:5.1, h:2.35, shape:{kind:"blob", col:a.helmet, gloss:shine,
+      pts:[[0.5,0],[0.88,0.16],[1,0.62],[1,1],[0,1],[0,0.62],[0.12,0.16]]}},
+    // chest plate over the tunic, with a lighter sheen band and shoulder pads that swing
+    {x:-2.35, y:1.75, w:4.7, h:3.9, shape:{kind:"rrect", r:0.34, col:a.chest, gloss:shine}},
+    {x:-1.5, y:2.6, w:3.0, h:2.2, shape:{kind:"ellipse", col:towardsWhite(a.chest,0.22),
+      outline:false, alpha:0.45}},
+    {x:-1.05, y:1.75, w:2.1, h:0.7, shape:{kind:"rrect", r:0.4, col:a.chestTrim, gloss:0.4}},
+    {x:-3.8, y:4.2, w:1.9, h:1.5, shape:{kind:"ellipse", col:a.chest, gloss:shine}, group:"armL"},
+    {x:1.9, y:4.2, w:1.9, h:1.5, shape:{kind:"ellipse", col:a.chest, gloss:shine}, group:"armR"},
     // gloves at the paws
-    {x:-3.6,y:1.9,w:1.4,h:1.4,sprite:{grid:SPRITES.glove,palette:glovePal}, group:"armL"},
-    {x:2.2,y:1.9,w:1.4,h:1.4,sprite:{grid:SPRITES.glove,palette:glovePal}, group:"armR"},
+    {x:-3.7, y:1.75, w:1.6, h:1.5, shape:{kind:"rrect", r:0.4, col:a.glove, gloss:shine}, group:"armL"},
+    {x:2.1, y:1.75, w:1.6, h:1.5, shape:{kind:"rrect", r:0.4, col:a.glove, gloss:shine}, group:"armR"},
     // shin guards over the boots
-    {x:-2.2,y:-2.3,w:2.1,h:1.7,sprite:{grid:SPRITES.shin,palette:shinPal}, group:"legL"},
-    {x:0.1,y:-2.3,w:2.1,h:1.7,sprite:{grid:SPRITES.shin,palette:shinPal}, group:"legR"},
+    {x:-2.25, y:-2.3, w:2.2, h:1.9, shape:{kind:"rrect", r:0.35, col:a.shin, gloss:shine}, group:"legL"},
+    {x:0.05, y:-2.3, w:2.2, h:1.9, shape:{kind:"rrect", r:0.35, col:a.shin, gloss:shine}, group:"legR"},
   ];
 }
 
@@ -1983,18 +1971,32 @@ const CLASSES = {
 
 /* ---------- animals ----------
    A purely cosmetic-plus-a-perk choice, independent of class: any class can be any animal.
-   Each swaps fur color and ear shape (see playerBodyPalette/playerParts) and grants one
+   Each swaps fur color, ear/tail shape (see playerParts) and grants one
    small passive bonus applied once at character creation, alongside the class/skill mods. */
+// Each animal now carries the shape hints the smooth renderer needs to actually look like
+// that animal rather than a recolored blob: ear silhouette (long/pointed/round) and size,
+// an optional tail (bushy, thin or a puff, with its own tip color), and how far the muzzle
+// pushes out. See playerParts() for how these get assembled.
 const ANIMALS = {
-  bunny: { id:"bunny", name:"Bunny", furColor:"#f7ede2", earSprite:"earBunny", earBox:{w:2.1,h:5.0},
+  bunny: { id:"bunny", name:"Bunny", furColor:"#f7ede2",
+    ear:{kind:"long", w:1.9, h:5.0, tilt:0.10}, muzzle:0.95,
+    tail:{kind:"puff", w:1.9, h:1.9},
     perkDesc:"+12% move speed", apply:p=>{ p.mods.moveSpeedMult*=1.12; } },
-  fox: { id:"fox", name:"Fox", furColor:"#e08a4a", earSprite:"earFox", earBox:{w:2.1,h:3.6},
+  fox: { id:"fox", name:"Fox", furColor:"#e08a4a",
+    ear:{kind:"pointed", w:2.3, h:3.6, tilt:0.20}, muzzle:1.15,
+    tail:{kind:"bushy", w:4.4, h:2.9, tip:"#f7ede2"},
     perkDesc:"+15% gold gained", apply:p=>{ p.mods.goldMult*=1.15; } },
-  cat: { id:"cat", name:"Cat", furColor:"#b9b0c7", earSprite:"earCat", earBox:{w:2.1,h:3.0},
+  cat: { id:"cat", name:"Cat", furColor:"#b9b0c7",
+    ear:{kind:"pointed", w:2.0, h:2.8, tilt:0.16}, muzzle:0.9,
+    tail:{kind:"thin", w:3.8, h:2.4},
     perkDesc:"+10% double-hit chance", apply:p=>{ p.mods.doubleHitChance+=0.10; } },
-  bear: { id:"bear", name:"Bear", furColor:"#8a5c3a", earSprite:"earBear", earBox:{w:2.1,h:2.4},
+  bear: { id:"bear", name:"Bear", furColor:"#8a5c3a",
+    ear:{kind:"round", w:2.2, h:2.2, tilt:0.05}, muzzle:1.25,
+    tail:null,
     perkDesc:"+1 max HP", apply:p=>{ p.baseMaxHp+=1; } },
-  raccoon: { id:"raccoon", name:"Raccoon", furColor:"#9a9aa2", earSprite:"earRaccoon", earBox:{w:2.1,h:3.0}, maskColor:"#3a2b3f",
+  raccoon: { id:"raccoon", name:"Raccoon", furColor:"#9a9aa2", maskColor:"#3a2b3f",
+    ear:{kind:"round", w:2.1, h:2.3, tilt:0.08}, muzzle:1.05,
+    tail:{kind:"bushy", w:4.2, h:2.7, tip:"#3a2b3f"},
     perkDesc:"+25% pickup radius", apply:p=>{ p.pickupRadius*=1.25; } },
 };
 
@@ -2016,31 +2018,68 @@ function towardsWhite(hex, t){
   return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
 }
 
+// Weapons are built from shaded shapes: a tapered blade blob with a hard specular for steel,
+// a capsule haft for wood, a glow pass for anything magical. All still ride the "weapon"
+// group, so weaponSwingPose()'s existing pivot rotation animates them exactly as before.
+const STEEL = "#dde5ee", STEEL_D = "#8a97a8", WOOD = "#8a5a44", WOOD_D = "#5a3d28", GOLD = "#f0c14b";
 function weaponParts(type){
-  const spr = (t)=>WEAPON_SPRITES[t] || WEAPON_SPRITES.sword;
+  const blade = (x,y,w,h,col,g)=>({x,y,w,h, shape:{kind:"blob", col:col||STEEL, gloss:g!=null?g:0.85,
+    pts:[[0.5,0],[0.86,0.14],[1,0.5],[0.86,0.93],[0.5,1],[0.14,0.93],[0,0.5],[0.14,0.14]]}, group:"weapon"});
+  const haft = (x,y,w,h,col)=>({x,y,w,h, shape:{kind:"capsule", col:col||WOOD, gloss:0.3}, group:"weapon"});
   switch(type){
     case "spear":
-      return [{x:2.55,y:2,w:1.1,h:10.8,sprite:spr("spear"), group:"weapon"}];
+      return [
+        haft(2.75, 1.9, 0.85, 8.6, "#c9a86e"),
+        blade(2.25, 9.7, 1.9, 3.2, STEEL, 0.9),
+      ];
     case "axe":
-      return [{x:1.3,y:1.8,w:3.2,h:6.8,sprite:spr("axe"), group:"weapon"}];
+      return [
+        haft(2.5, 1.8, 0.9, 6.4),
+        {x:0.7, y:5.4, w:3.4, h:3.0, shape:{kind:"blob", col:"#b9c3cf", gloss:0.85,
+          pts:[[1,0],[0.55,0.1],[0.16,0.34],[0,0.62],[0.22,0.92],[0.7,1],[1,0.9]]}, group:"weapon"},
+      ];
     case "hammer":
-      return [{x:1.2,y:1.8,w:4.2,h:6.6,sprite:spr("hammer"), group:"weapon"}];
+      return [
+        haft(2.5, 1.8, 0.9, 6.2),
+        {x:0.85, y:6.1, w:3.9, h:2.5, shape:{kind:"rrect", r:0.26, col:"#aab4c2", gloss:0.9}, group:"weapon"},
+        {x:1.15, y:6.5, w:1.2, h:1.6, shape:{kind:"rrect", r:0.3, col:"#d7dee7", outline:false, alpha:0.5}, group:"weapon"},
+      ];
     case "staff":
-      return [{x:2.35,y:2,w:1.4,h:9.6,sprite:spr("staff"), group:"weapon"}];
+      return [
+        haft(2.55, 1.9, 0.85, 8.2, WOOD_D),
+        {x:1.35, y:9.0, w:3.3, h:3.3, shape:{kind:"glow", col:"#b19bff", alpha:0.75}, group:"weapon"},
+        {x:2.15, y:9.8, w:1.7, h:1.7, shape:{kind:"ellipse", col:"#c9b8ff", gloss:0.9}, group:"weapon"},
+      ];
     case "bow":
-      return [{x:2.3,y:1.6,w:1.3,h:6.8,sprite:spr("bow"), group:"weapon"}];
+      return [
+        {x:2.2, y:1.7, w:2.0, h:7.4, shape:{kind:"blob", col:WOOD, gloss:0.4,
+          pts:[[0.62,0],[1,0.22],[1,0.78],[0.62,1],[0.42,0.92],[0.72,0.72],[0.72,0.28],[0.42,0.08]]}, group:"weapon"},
+        {x:2.42, y:1.75, w:0.22, h:7.3, shape:{kind:"rrect", r:0.5, col:"#efeee6", flat:true, outline:false, alpha:0.85}, group:"weapon"},
+      ];
     case "gauntlets":
       return [
-        {x:-3.6,y:1.9,w:1.5,h:1.5,sprite:spr("gauntlets"), group:"armL"},
-        {x:2.2,y:1.9,w:1.5,h:1.5,sprite:spr("gauntlets"), group:"armR"},
+        {x:-3.75,y:1.7,w:1.75,h:1.75, shape:{kind:"rrect", r:0.36, col:"#d8b04e", gloss:0.9}, group:"armL"},
+        {x:2.0,  y:1.7,w:1.75,h:1.75, shape:{kind:"rrect", r:0.36, col:"#d8b04e", gloss:0.9}, group:"armR"},
       ];
     case "greatsword":
-      return [{x:2.2,y:2.0,w:1.6,h:8.4,sprite:spr("greatsword"), group:"weapon"}];
+      return [
+        haft(2.6, 1.9, 0.9, 2.4, WOOD_D),
+        {x:1.55, y:4.0, w:3.0, h:0.85, shape:{kind:"rrect", r:0.45, col:GOLD, gloss:0.7}, group:"weapon"},
+        blade(2.05, 4.5, 2.0, 6.4, "#e4ebf3", 0.9),
+      ];
     case "nunchaku":
-      return [{x:2.4,y:2.2,w:1.1,h:5.6,sprite:spr("nunchaku"), group:"weapon"}];
+      return [
+        haft(2.6, 1.9, 0.9, 2.9, WOOD_D),
+        {x:2.85, y:4.7, w:0.35, h:1.1, shape:{kind:"capsule", col:"#3a3a3a", flat:true, outline:false}, group:"weapon"},
+        haft(2.6, 5.6, 0.9, 2.9, WOOD_D),
+      ];
     case "sword":
     default:
-      return [{x:2.6,y:2.4,w:0.9,h:5.1,sprite:spr("sword"), group:"weapon"}];
+      return [
+        haft(2.7, 2.1, 0.8, 1.9, WOOD_D),
+        {x:1.9, y:3.85, w:2.4, h:0.72, shape:{kind:"rrect", r:0.45, col:GOLD, gloss:0.7}, group:"weapon"},
+        blade(2.35, 4.3, 1.5, 4.6, STEEL, 0.9),
+      ];
   }
 }
 
@@ -2074,161 +2113,305 @@ function weaponSwingPose(style, p){
   }
 }
 
+// one ear, built from the animal's ear spec - a long capsule (bunny), a soft pointed
+// triangle (fox/cat) or a round paddle (bear/raccoon), each with a pink inner ear
+function earParts(animal, fur, x, y, group){
+  const e = animal.ear, inner = "#ffb5c7";
+  const out = [];
+  if(e.kind==="long"){
+    out.push({x, y, w:e.w, h:e.h, shape:{kind:"capsule", col:fur.base, gloss:0.35}, group});
+    out.push({x:x+e.w*0.26, y:y+e.h*0.16, w:e.w*0.48, h:e.h*0.6,
+      shape:{kind:"capsule", col:inner, outline:false, alpha:0.85}, group});
+  } else if(e.kind==="pointed"){
+    out.push({x, y, w:e.w, h:e.h, shape:{kind:"blob", col:fur.base, gloss:0.35,
+      pts:[[0.5,0],[0.92,0.72],[1,1],[0,1],[0.08,0.72]]}, group});
+    out.push({x:x+e.w*0.26, y:y+e.h*0.1, w:e.w*0.48, h:e.h*0.62, shape:{kind:"blob", col:inner,
+      outline:false, alpha:0.8, pts:[[0.5,0],[1,0.8],[1,1],[0,1],[0,0.8]]}, group});
+  } else {
+    out.push({x, y, w:e.w, h:e.h, shape:{kind:"ellipse", col:fur.base, gloss:0.35}, group});
+    out.push({x:x+e.w*0.24, y:y+e.h*0.2, w:e.w*0.52, h:e.h*0.55,
+      shape:{kind:"ellipse", col:inner, outline:false, alpha:0.8}, group});
+  }
+  return out;
+}
+// the tail, drawn behind everything else - a bushy sweep (fox/raccoon), a thin curl (cat)
+// or a little puff (bunny), with an optional contrasting tip
+function tailParts(animal, fur){
+  const t = animal.tail;
+  if(!t) return [];
+  const out = [];
+  if(t.kind==="bushy"){
+    out.push({x:-3.0-t.w*0.62, y:1.1, w:t.w, h:t.h, shape:{kind:"blob", col:fur.base, gloss:0.3,
+      pts:[[0.95,0.18],[0.62,0],[0.24,0.1],[0.02,0.42],[0.1,0.8],[0.42,1],[0.78,0.86],[1,0.55]]}, group:"tail"});
+    if(t.tip) out.push({x:-3.0-t.w*0.62, y:1.1+t.h*0.42, w:t.w*0.42, h:t.h*0.5,
+      shape:{kind:"ellipse", col:t.tip, gloss:0.3, alpha:0.95}, group:"tail"});
+  } else if(t.kind==="thin"){
+    out.push({x:-2.9-t.w*0.7, y:1.5, w:t.w, h:t.h, shape:{kind:"blob", col:fur.base, gloss:0.25,
+      pts:[[1,0.62],[0.72,0.42],[0.4,0.3],[0.12,0.44],[0.06,0.72],[0.3,0.82],[0.62,0.78],[1,0.86]]}, group:"tail"});
+  } else {
+    out.push({x:-3.5, y:1.3, w:t.w, h:t.h, shape:{kind:"ellipse", col:towardsWhite(fur.base,0.25), gloss:0.45}, group:"tail"});
+  }
+  return out;
+}
+// head + face for a given animal: the skull, muzzle and nose, the raccoon's mask, eyes with
+// catchlights and a soft blush. Shared by the in-game character and the animal-picker
+// portraits, so the face you choose on the menu is literally the face you play.
+function faceParts(animal, fur, side, back){
+  const parts = [{x:-2.85, y:6.1, w:5.7, h:5.3, shape:{kind:"ellipse", col:fur.base, gloss:0.5}}];
+  if(back) return parts;
+  const muz = animal.muzzle || 1;
+  const muzX = side ? 0.55 : 0;
+  parts.push({x:muzX-1.35*muz, y:6.55, w:2.7*muz, h:1.95,
+    shape:{kind:"ellipse", col:towardsWhite(animal.furColor,0.34), outline:false, gloss:0.4}});
+  parts.push({x:muzX-0.32, y:7.45, w:0.64, h:0.46,
+    shape:{kind:"ellipse", col:"#5c4152", flat:true, outline:false}});
+  if(animal.maskColor){
+    // raccoon's bandit mask, laid across the eye line before the eyes go on
+    parts.push({x:side?-1.5:-2.35, y:8.0, w:side?3.9:4.7, h:1.75, shape:{kind:"blob", col:animal.maskColor,
+      outline:false, alpha:0.92, pts:[[0.06,0.2],[0.5,0],[0.94,0.2],[1,0.72],[0.5,1],[0,0.72]]}});
+  }
+  parts.push(...eyePair(side ? [0.85] : [-0.95, 0.95], 8.1, 0.84, 1.06, "#2a1e30"));
+  // soft blush, no outline so it reads as a tint in the fur rather than a sticker
+  (side ? [1.55] : [-1.9, 1.9]).forEach(bx=>{
+    parts.push({x:bx-0.62, y:7.2, w:1.24, h:0.8,
+      shape:{kind:"ellipse", col:"#ffb5c7", flat:true, outline:false, alpha:0.4}});
+  });
+  return parts;
+}
 function playerParts(weaponType, armorKey, facingDir, animalId){
   const animal = ANIMALS[animalId] || ANIMALS.bunny;
-  const pal = playerBodyPalette(animalId);
-  const headGrid = facingDir==="back" ? SPRITES.headBack : facingDir==="side" ? SPRITES.headSide : SPRITES.head;
-  const earGrid = SPRITES[animal.earSprite] || SPRITES.earBunny;
-  const eb = animal.earBox;
-  // in side profile both ears sweep back together (away from the muzzle, which pokes out the
-  // front/right of headSide) instead of sitting spread apart the way they do face-on
-  const sideView = facingDir==="side";
-  const earLX = sideView ? -1.9 : -2.5;
-  const earRX = sideView ? -0.9 : 0.4;
-  const parts = [
-    // ears (shape + length vary per animal; anchored at the same base point so shorter
-    // ears - bear, cat - just don't reach as high as the bunny's)
-    {x:earLX,y:11,w:eb.w,h:eb.h,sprite:{grid:earGrid,palette:pal}, group:"earL"},
-    {x:earRX,y:11,w:eb.w,h:eb.h,sprite:{grid:earGrid,palette:pal}, group:"earR"},
-    // head (back-of-head, faceless, when walking away from the camera)
-    {x:-2.7,y:6.0,w:5.4,h:5.6,sprite:{grid:headGrid,palette:pal}},
-    // body
-    {x:-2.5,y:1.4,w:5.0,h:5.2,sprite:{grid:SPRITES.torso,palette:pal}},
-    // arms
-    {x:-3.5,y:2.0,w:1.4,h:3.4,sprite:{grid:SPRITES.arm,palette:pal}, group:"armL"},
-    {x:2.1,y:2.0,w:1.4,h:3.4,sprite:{grid:SPRITES.arm,palette:pal}, group:"armR"},
-    // legs
-    {x:-2.1,y:-2.4,w:1.9,h:4.2,sprite:{grid:SPRITES.leg,palette:pal}, group:"legL"},
-    {x:0.2,y:-2.4,w:1.9,h:4.2,sprite:{grid:SPRITES.leg,palette:pal}, group:"legR"},
-  ];
+  const fur = tonesFrom(animal.furColor);
+  const tunic = tonesFrom(COL.tunic);
+  const boot = tonesFrom(COL.boots);
+  const side = facingDir==="side", back = facingDir==="back";
+  const e = animal.ear;
+  // face-on the ears sit spread to either side of the skull; in profile they both sweep back
+  // together, away from the muzzle poking out the front
+  const earLX = side ? -2.3 : -2.35 - e.w*0.15;
+  const earRX = side ? -1.1 : 0.35 + e.w*0.15;
+
+  const parts = [];
+  parts.push(...tailParts(animal, fur));
+  parts.push(...earParts(animal, fur, earLX, 10.4, "earL"));
+  parts.push(...earParts(animal, fur, earRX, 10.4, "earR"));
+  // legs then torso then arms - the body overlaps the leg tops, the arms sit over the body
+  parts.push({x:-2.15, y:-2.4, w:2.0, h:4.3, shape:{kind:"capsule", col:boot.base, gloss:0.3}, group:"legL"});
+  parts.push({x:0.15, y:-2.4, w:2.0, h:4.3, shape:{kind:"capsule", col:boot.base, gloss:0.3}, group:"legR"});
+  parts.push({x:-2.5, y:1.3, w:5.0, h:5.4, shape:{kind:"rrect", r:0.42, col:tunic.base, gloss:0.4}});
+  // a lighter belly patch keeps the torso from reading as one flat slab
+  parts.push({x:-1.5, y:1.6, w:3.0, h:3.2, shape:{kind:"ellipse", col:towardsWhite(COL.tunic,0.3),
+    outline:false, alpha:0.55}});
+  parts.push({x:-3.55, y:1.9, w:1.6, h:3.6, shape:{kind:"capsule", col:fur.base, gloss:0.35}, group:"armL"});
+  parts.push({x:1.95, y:1.9, w:1.6, h:3.6, shape:{kind:"capsule", col:fur.base, gloss:0.35}, group:"armR"});
+  // head + face last, so they always sit cleanly in front of a raised arm
+  parts.push(...faceParts(animal, fur, side, back));
+
   parts.push(...armorParts(armorKey));
   parts.push(...weaponParts(weaponType));
   // armor sets with hasShield (see ARMOR_SETS) carry a shield on the off-hand (armL) - the
   // weapon always renders on armR's side, except gauntlets which punch with both fists
   const armorSet = ARMOR_SETS[armorKey] || ARMOR_SETS.traveler;
   if(armorSet.hasShield && weaponType!=="gauntlets"){
-    parts.push({x:-4.3,y:1.5,w:2.1,h:2.9,sprite:{grid:SPRITES.shield,palette:armorPalette(armorSet.chest)}, group:"armL"});
+    const sh = tonesFrom(armorSet.chest);
+    parts.push({x:-4.5, y:1.4, w:2.4, h:3.2, shape:{kind:"blob", col:sh.base, gloss:0.55,
+      pts:[[0.5,0],[1,0.14],[1,0.62],[0.5,1],[0,0.62],[0,0.14]]}, group:"armL"});
+    parts.push({x:-3.85, y:2.45, w:1.1, h:1.1,
+      shape:{kind:"ellipse", col:towardsWhite(armorSet.helmet,0.25), gloss:0.6}, group:"armL"});
   }
   return parts;
 }
 
+// a pair of eyes, the one detail nearly every creature shares - dark lens plus a catchlight
+// so they read as wet and alive instead of as two flat holes
+function eyePair(xs, y, w, h, col, group){
+  const out = [];
+  xs.forEach(ex=>{
+    out.push({x:ex-w/2, y, w, h, shape:{kind:"ellipse", col:col||"#2a1e30", flat:true, outline:false}, group});
+    out.push({x:ex-w*0.34, y:y+h*0.48, w:w*0.4, h:h*0.36,
+      shape:{kind:"ellipse", col:"#ffffff", flat:true, outline:false, alpha:0.85}, group});
+  });
+  return out;
+}
+// slime: a translucent jelly dome - the gradient plus a bright inner core and a hard gloss
+// spot is what sells "wobbling blob of liquid" rather than "green rectangle"
 function slimeParts(hue){
-  const t = tonesFrom(hue||COL.slime);
-  const pal = {o:t.out, h:t.hi, b:t.base, c:COL.slimeCore, e:COL.ink, s:t.sh};
+  const c = hue || COL.slime;
   return [
-    {x:-3.6,y:0,w:7.2,h:7.2,sprite:{grid:SPRITES.slime,palette:pal}, group:"body"},
+    {x:-3.6, y:0, w:7.2, h:6.6, shape:{kind:"blob", col:c, gloss:0.8, alpha:0.92, ol:0.45,
+      pts:[[0.5,0],[0.86,0.12],[1,0.5],[0.97,0.86],[0.62,1],[0.38,1],[0.03,0.86],[0,0.5],[0.14,0.12]]}, group:"body"},
+    {x:-2.0, y:1.0, w:4.0, h:3.4, shape:{kind:"ellipse", col:towardsWhite(c,0.55),
+      outline:false, alpha:0.42}, group:"body"},
+    ...eyePair([-1.15, 1.15], 3.3, 0.95, 1.15, COL.ink, "body"),
   ];
 }
+// brute: a squat mossy boulder of a creature - heavy, low-contrast rock body with moss
+// clumps on the shoulders and small glowing eyes set deep in the mass
 function bruteParts(){
-  const t = tonesFrom("#7a8a6a");
-  const pal = {o:t.out, h:t.hi, b:t.base, c:"#c9d6b0", e:COL.ink, s:t.sh};
+  const rock = "#7a8a6a";
   return [
-    {x:-4.4,y:0,w:8.8,h:8.4,sprite:{grid:SPRITES.brute,palette:pal}, group:"body"},
+    {x:-2.6, y:-0.3, w:2.2, h:1.7, shape:{kind:"rrect", r:0.4, col:shadeTone(rock,0.3), gloss:0.2}, group:"body"},
+    {x:0.4,  y:-0.3, w:2.2, h:1.7, shape:{kind:"rrect", r:0.4, col:shadeTone(rock,0.3), gloss:0.2}, group:"body"},
+    {x:-4.4, y:0.9, w:8.8, h:7.4, shape:{kind:"blob", col:rock, gloss:0.4, ol:0.5,
+      pts:[[0.5,0],[0.84,0.08],[1,0.38],[0.94,0.8],[0.66,1],[0.34,1],[0.06,0.8],[0,0.38],[0.16,0.08]]}, group:"body"},
+    {x:-3.3, y:6.3, w:3.0, h:1.7, shape:{kind:"ellipse", col:"#6f9153", outline:false, alpha:0.8}, group:"body"},
+    {x:0.6,  y:6.6, w:2.4, h:1.4, shape:{kind:"ellipse", col:"#7fa35e", outline:false, alpha:0.7}, group:"body"},
+    {x:-2.0, y:3.5, w:1.5, h:1.5, shape:{kind:"glow", col:"#d8ff9a", alpha:0.5}, group:"body"},
+    {x:0.5,  y:3.5, w:1.5, h:1.5, shape:{kind:"glow", col:"#d8ff9a", alpha:0.5}, group:"body"},
+    ...eyePair([-1.25, 1.25], 3.9, 0.8, 0.8, "#e9ffb0", "body"),
   ];
 }
 
 function batParts(){
   const t = tonesFrom(COL.bat);
-  const wingPal = {o:t.out, h:t.hi, b:t.base};
-  const bodyPal = {o:t.out, b:t.base, w:"#fff", s:t.sh};
+  const membrane = towardsWhite(COL.bat, 0.1);
   return [
-    {x:-6,y:3.6,w:5.4,h:4.2,sprite:{grid:SPRITES.batWingL,palette:wingPal}, group:"wingL"},
-    {x:1.6,y:3.6,w:5.4,h:4.2,sprite:{grid:SPRITES.batWingR,palette:wingPal}, group:"wingR"},
-    {x:-2.4,y:2.6,w:4.8,h:4.6,sprite:{grid:SPRITES.batBody,palette:bodyPal}},
-    {x:-0.9,y:3,w:0.4,h:0.6,c:"#fff", group:"fangL"},
-    {x:0.5,y:3,w:0.4,h:0.6,c:"#fff", group:"fangR"},
+    // wings: scalloped membrane curves that sweep out and back from the shoulders
+    {x:-6.4, y:3.2, w:5.6, h:4.6, shape:{kind:"blob", col:membrane, gloss:0.3, ol:0.45,
+      pts:[[1,0.12],[0.6,0],[0.2,0.16],[0,0.5],[0.24,0.62],[0.06,0.82],[0.42,0.8],[0.34,1],[0.72,0.72],[1,0.62]]}, group:"wingL"},
+    {x:0.8, y:3.2, w:5.6, h:4.6, shape:{kind:"blob", col:membrane, gloss:0.3, ol:0.45,
+      pts:[[0,0.12],[0.4,0],[0.8,0.16],[1,0.5],[0.76,0.62],[0.94,0.82],[0.58,0.8],[0.66,1],[0.28,0.72],[0,0.62]]}, group:"wingR"},
+    // ears
+    {x:-1.7, y:6.4, w:1.3, h:2.0, shape:{kind:"blob", col:t.base, gloss:0.3,
+      pts:[[0.5,0],[1,0.85],[1,1],[0,1],[0,0.85]]}},
+    {x:0.4, y:6.4, w:1.3, h:2.0, shape:{kind:"blob", col:t.base, gloss:0.3,
+      pts:[[0.5,0],[1,0.85],[1,1],[0,1],[0,0.85]]}},
+    {x:-2.4, y:2.8, w:4.8, h:4.4, shape:{kind:"ellipse", col:t.base, gloss:0.45}},
+    {x:-1.5, y:3.2, w:3.0, h:2.4, shape:{kind:"ellipse", col:towardsWhite(COL.bat,0.22), outline:false, alpha:0.5}},
+    ...eyePair([-1.0, 1.0], 5.0, 0.85, 0.95, COL.ink),
+    {x:-0.85, y:3.15, w:0.5, h:0.85, shape:{kind:"blob", col:"#ffffff", flat:true, outline:false,
+      pts:[[0.5,1],[1,0],[0,0]]}, group:"fangL"},
+    {x:0.35, y:3.15, w:0.5, h:0.85, shape:{kind:"blob", col:"#ffffff", flat:true, outline:false,
+      pts:[[0.5,1],[1,0],[0,0]]}, group:"fangR"},
   ];
 }
 
 function ratParts(){
   const t = tonesFrom(COL.rat);
-  const pal = {o:t.out, b:t.base, e:COL.ink, s:t.sh};
   return [
-    {x:-1,y:-0.4,w:3.2,h:0.7,c:COL.tail, group:"tail"},
-    {x:-3.6,y:1,w:7.2,h:4,sprite:{grid:SPRITES.ratBody,palette:pal}},
-    {x:2.6,y:1.4,w:1.4,h:1.2,c:COL.ratDark, group:"legR"},
-    {x:-3.2,y:1.4,w:1.4,h:1.2,c:COL.ratDark, group:"legL"},
+    {x:-4.6, y:0.9, w:3.0, h:1.9, shape:{kind:"blob", col:COL.tail, gloss:0.25, ol:0.4,
+      pts:[[1,0.3],[0.66,0.1],[0.3,0.2],[0.06,0.5],[0.2,0.78],[0.5,0.72],[0.8,0.6],[1,0.62]]}, group:"tail"},
+    {x:-2.9, y:1.2, w:1.5, h:1.4, shape:{kind:"ellipse", col:COL.ratDark, gloss:0.3}, group:"legL"},
+    {x:1.5,  y:1.2, w:1.5, h:1.4, shape:{kind:"ellipse", col:COL.ratDark, gloss:0.3}, group:"legR"},
+    {x:-3.3, y:1.5, w:6.4, h:3.4, shape:{kind:"ellipse", col:t.base, gloss:0.45}},
+    {x:1.4,  y:5.0, w:1.3, h:1.3, shape:{kind:"ellipse", col:t.base, gloss:0.4}},
+    {x:1.1,  y:1.9, w:3.4, h:2.9, shape:{kind:"ellipse", col:towardsWhite(COL.rat,0.12), gloss:0.5}},
+    {x:3.9,  y:2.5, w:0.9, h:0.75, shape:{kind:"ellipse", col:"#e0a0a8", gloss:0.4}},
+    ...eyePair([2.5], 3.2, 0.75, 0.85, COL.ink),
   ];
 }
-// boar: reuses the rat's proven body silhouette at a bigger scale with a browner palette and
-// a pair of small tusks - a fast ground charger that appears from floor 3 onward (see updateEnemy
-// loop's "boar" lunge burst)
+// boar: a heavier, tusked charger - same low horizontal read as the rat but bulkier, with a
+// blunt snout and a pair of pale tusks (see the "boar" lunge burst in the enemy update loop)
 function boarParts(){
   const t = tonesFrom("#8a6748");
-  const pal = {o:t.out, b:t.base, e:COL.ink, s:t.sh};
   return [
-    {x:-1.3,y:-0.5,w:2.2,h:0.9,c:t.sh, group:"tail"},
-    {x:-4.6,y:1,w:9.2,h:5.2,sprite:{grid:SPRITES.ratBody,palette:pal}},
-    {x:3.2,y:1.6,w:1.8,h:1.6,c:t.sh, group:"legR"},
-    {x:-4.4,y:1.6,w:1.8,h:1.6,c:t.sh, group:"legL"},
-    {x:-4.6,y:2.4,w:0.9,h:0.6,c:"#f5f0e0", group:"tuskL"},
-    {x:3.7,y:2.4,w:0.9,h:0.6,c:"#f5f0e0", group:"tuskR"},
+    {x:-1.6, y:-0.4, w:1.9, h:1.0, shape:{kind:"capsule", col:t.sh, gloss:0.2}, group:"tail"},
+    {x:-3.6, y:0.9, w:1.9, h:1.7, shape:{kind:"ellipse", col:t.sh, gloss:0.3}, group:"legL"},
+    {x:2.0,  y:0.9, w:1.9, h:1.7, shape:{kind:"ellipse", col:t.sh, gloss:0.3}, group:"legR"},
+    {x:-4.3, y:1.5, w:8.2, h:4.5, shape:{kind:"ellipse", col:t.base, gloss:0.45}},
+    {x:-1.4, y:5.2, w:1.5, h:1.6, shape:{kind:"blob", col:t.sh, gloss:0.3,
+      pts:[[0.5,0],[1,0.9],[1,1],[0,1],[0,0.9]]}},
+    {x:1.4,  y:2.0, w:3.6, h:3.2, shape:{kind:"ellipse", col:towardsWhite("#8a6748",0.1), gloss:0.5}},
+    {x:4.0,  y:2.6, w:1.2, h:1.1, shape:{kind:"ellipse", col:"#6f503a", gloss:0.4}},
+    {x:3.5,  y:1.5, w:0.9, h:1.4, shape:{kind:"blob", col:"#f5f0e0", gloss:0.5,
+      pts:[[0.5,0],[1,0.7],[0.7,1],[0.2,0.7]]}, group:"tuskL"},
+    {x:4.4,  y:1.7, w:0.8, h:1.2, shape:{kind:"blob", col:"#f5f0e0", gloss:0.5,
+      pts:[[0.5,0],[1,0.7],[0.7,1],[0.2,0.7]]}, group:"tuskR"},
+    ...eyePair([2.6], 3.6, 0.8, 0.9, COL.ink),
   ];
 }
 
 function ghostParts(){
   const t = tonesFrom(COL.ghost);
-  const pal = {o:t.out, h:t.hi, b:t.base, s:t.sh, e:COL.ghostDark, m:COL.ghostDark};
-  const wavePal = {o:t.out, h:t.hi, b:t.base, s:t.sh};
-  const p=[
-    {x:-3.8,y:2.6,w:7.6,h:6.6,sprite:{grid:SPRITES.ghostBody,palette:pal}},
+  const p = [
+    // a faint aura behind the body, so it glows rather than just being pale
+    {x:-4.6, y:1.6, w:9.2, h:9.0, shape:{kind:"glow", col:COL.ghost, alpha:0.35}},
+    {x:-3.6, y:2.4, w:7.2, h:6.8, shape:{kind:"blob", col:t.base, gloss:0.55, alpha:0.88, ol:0.35,
+      pts:[[0.5,0],[0.84,0.1],[1,0.42],[1,1],[0,1],[0,0.42],[0.16,0.1]]}},
+    ...eyePair([-1.2, 1.2], 5.6, 1.0, 1.25, COL.ghostDark),
+    {x:-0.7, y:4.3, w:1.4, h:0.9, shape:{kind:"ellipse", col:COL.ghostDark, outline:false, alpha:0.6}},
   ];
+  // the trailing skirt: four soft lobes that ripple independently (see drawCreature's waves)
   for(let i=0;i<4;i++){
-    p.push({x:-3.6+i*1.8, y:0.4, w:1.8, h:2.8, sprite:{grid:SPRITES.ghostWave,palette:wavePal}, group:"wave"+i});
+    p.push({x:-3.6+i*1.8, y:0.3, w:1.9, h:2.9, shape:{kind:"blob", col:t.base, alpha:0.8, outline:false,
+      pts:[[0.5,0],[1,0.25],[0.92,0.72],[0.5,1],[0.08,0.72],[0,0.25]]}, group:"wave"+i});
   }
   return p;
 }
 
 function wispParts(hue){
   const c = hue || "#b19bff";
-  const t = tonesFrom(c);
-  const pal = {o:t.out, h:t.hi, b:t.base, c:towardsWhite(c,0.6)};
   return [
-    {x:-3.2,y:0,w:6.4,h:6.4,sprite:{grid:SPRITES.wisp,palette:pal}, group:"body"},
+    {x:-4.2, y:-1.0, w:8.4, h:8.4, shape:{kind:"glow", col:c, alpha:0.55}, group:"body"},
+    {x:-2.4, y:0.8, w:4.8, h:4.8, shape:{kind:"ellipse", col:c, gloss:0.85, alpha:0.92, ol:0.3}, group:"body"},
+    {x:-1.3, y:1.9, w:2.6, h:2.6, shape:{kind:"ellipse", col:towardsWhite(c,0.7),
+      outline:false, alpha:0.75}, group:"body"},
   ];
 }
 
 function bossParts(kind){
   const b = BOSSES[kind] || BOSSES.boss;
   const t = tonesFrom(b.bodyColor);
-  const pal = {o:t.out, h:t.hi, b:t.base, s:t.sh, e:COL.ink, m:COL.ink};
   const parts = [
-    {x:-6.8,y:0,w:13.6,h:11,sprite:{grid:SPRITES.bossBody,palette:pal}, group:"body"},
+    // menacing aura, then the bulk of the body, then a lighter chest mass for depth
+    {x:-8.4, y:-0.8, w:16.8, h:13.6, shape:{kind:"glow", col:b.bodyColor, alpha:0.4}, group:"body"},
+    {x:-6.8, y:0, w:13.6, h:11.2, shape:{kind:"blob", col:t.base, gloss:0.5, ol:0.52,
+      pts:[[0.5,0],[0.82,0.06],[1,0.3],[0.96,0.74],[0.72,1],[0.28,1],[0.04,0.74],[0,0.3],[0.18,0.06]]}, group:"body"},
+    {x:-4.0, y:1.4, w:8.0, h:5.4, shape:{kind:"ellipse", col:towardsWhite(b.bodyColor,0.16),
+      outline:false, alpha:0.4}, group:"body"},
+    // glowing eyes set into the mass
+    {x:-3.4, y:6.4, w:2.6, h:2.6, shape:{kind:"glow", col:b.faceColor, alpha:0.6}, group:"body"},
+    {x:0.8,  y:6.4, w:2.6, h:2.6, shape:{kind:"glow", col:b.faceColor, alpha:0.6}, group:"body"},
+    ...eyePair([-2.1, 2.1], 7.0, 1.5, 1.7, b.faceColor, "body"),
+    {x:-2.2, y:4.6, w:4.4, h:1.2, shape:{kind:"blob", col:shadeTone(b.bodyColor,0.55), outline:false, alpha:0.8,
+      pts:[[0,0.2],[0.5,0],[1,0.2],[0.86,1],[0.14,1]]}, group:"body"},
   ];
+  // toppers ride the "body" group too, so a crown/canopy/fin crest bobs with the boss
+  // instead of hovering detached above a moving head
   if(b.topper==="crown"){
-    parts.push({x:-3.2,y:12,w:1.6,h:1.8,c:COL.crown});
-    parts.push({x:-0.8,y:12.6,w:1.6,h:2.4,c:COL.crown});
-    parts.push({x:1.6,y:12,w:1.6,h:1.8,c:COL.crown});
+    const spike = (x,y,w,h)=>({x, y, w, h, shape:{kind:"blob", col:COL.crown, gloss:0.8,
+      pts:[[0.5,0],[0.86,0.72],[1,1],[0,1],[0.14,0.72]]}, group:"body"});
+    parts.push({x:-3.6, y:10.6, w:7.2, h:1.5, shape:{kind:"rrect", r:0.4, col:COL.crown, gloss:0.8}, group:"body"});
+    parts.push(spike(-3.4, 11.9, 2.0, 2.0), spike(-1.0, 11.9, 2.0, 2.8), spike(1.4, 11.9, 2.0, 2.0));
+    parts.push({x:-0.55, y:13.0, w:1.1, h:1.1, shape:{kind:"ellipse", col:"#ff6f91", gloss:0.9}, group:"body"});
   } else if(b.topper==="leaves"){
-    parts.push({x:-3.6,y:11.4,w:2.6,h:2.6,c:"#4d6b37"});
-    parts.push({x:-1,y:12.4,w:2.8,h:3,c:"#7fae55"});
-    parts.push({x:1.4,y:11.6,w:2.4,h:2.4,c:"#4d6b37"});
+    parts.push({x:-4.0, y:10.4, w:3.4, h:2.8, shape:{kind:"blob", col:"#4d6b37", gloss:0.4,
+      pts:[[0.9,0.1],[1,0.5],[0.6,0.95],[0.1,0.8],[0,0.35],[0.45,0]]}, group:"body"});
+    parts.push({x:-1.5, y:11.2, w:3.6, h:3.2, shape:{kind:"blob", col:"#7fae55", gloss:0.45,
+      pts:[[0.5,0],[1,0.3],[0.9,0.8],[0.5,1],[0.1,0.8],[0,0.3]]}, group:"body"});
+    parts.push({x:1.0, y:10.6, w:3.2, h:2.6, shape:{kind:"blob", col:"#4d6b37", gloss:0.4,
+      pts:[[0.1,0.1],[0.55,0],[1,0.35],[0.9,0.8],[0.4,0.95],[0,0.5]]}, group:"body"});
   } else if(b.topper==="fins"){
-    parts.push({x:-3.4,y:11.6,w:1.6,h:2.8,c:"#2a5f7a", group:"finL"});
-    parts.push({x:-0.8,y:12.6,w:1.6,h:3.2,c:"#4fa8c9", group:"finM"});
-    parts.push({x:1.6,y:11.6,w:1.6,h:2.8,c:"#2a5f7a", group:"finR"});
+    const fin = (x,y,w,h,col)=>({x, y, w, h, shape:{kind:"blob", col, gloss:0.6,
+      pts:[[0.5,0],[0.9,0.55],[1,1],[0,1],[0.1,0.55]]}, group:"body"});
+    parts.push(fin(-3.6, 10.8, 2.0, 3.0, "#2a5f7a"));
+    parts.push(fin(-1.0, 11.2, 2.0, 3.6, "#4fa8c9"));
+    parts.push(fin(1.6, 10.8, 2.0, 3.0, "#2a5f7a"));
   }
   return parts;
 }
 
 const MERCHANT_ROBE_PAL = {o:"#3a2b20", h:"#9a7a5a", b:"#7a5a3e", s:"#5a3d28", t:"#d8a94a"};
-// shared "robed NPC" rig (merchant + the two quest-giver NPCs) - a robe palette and hood/trim
-// color are the only things that vary, so all three reuse this one hand-authored part list
+// shared "robed NPC" rig (merchant + the two quest-giver NPCs) - the robe color and hood/trim
+// are the only things that vary, so all three reuse this one shape list
 function robedNpcParts(robePal, hoodColor){
+  const robe = robePal.b || "#7a5a3e", trim = robePal.t || "#d8a94a";
   return [
-    // robe (widens toward the ground)
-    {x:-3.8,y:0,w:7.6,h:9.2,sprite:{grid:SPRITES.merchantRobe,palette:robePal}, group:"robe"},
+    // robe, widening toward the ground, with a trim band at the hem
+    {x:-3.8, y:0, w:7.6, h:9.6, shape:{kind:"blob", col:robe, gloss:0.35, ol:0.45,
+      pts:[[0.5,0],[0.7,0.08],[0.86,0.5],[1,1],[0,1],[0.14,0.5],[0.3,0.08]]}, group:"robe"},
+    {x:-3.5, y:0.15, w:7.0, h:1.0, shape:{kind:"rrect", r:0.4, col:trim, outline:false, alpha:0.85}, group:"robe"},
     // hood + face
-    {x:-2.2,y:9.2,w:4.4,h:3.4,c:hoodColor},
-    {x:-1.6,y:9.6,w:3.2,h:2.4,c:"#e8c9a0"},
-    {x:-1.1,y:10.3,w:0.7,h:0.8,c:COL.ink},
-    {x:0.5,y:10.3,w:0.7,h:0.8,c:COL.ink},
-    {x:-0.6,y:9.7,w:1.2,h:0.6,c:"#c9a06a"},
-    {x:-1,y:12.4,w:2,h:1.6,c:hoodColor, group:"hood"},
-    // lantern-holding arm
-    {x:2.3,y:1.6,w:1,h:2.6,c:hoodColor, group:"armR"},
-    {x:2,y:0,w:1.6,h:1.8,c:"#f5b942", group:"lantern"},
-    {x:2.3,y:1.8,w:1,h:0.4,c:hoodColor, group:"lantern"},
+    {x:-2.4, y:8.8, w:4.8, h:4.0, shape:{kind:"blob", col:hoodColor, gloss:0.35,
+      pts:[[0.5,0],[0.88,0.18],[1,0.6],[0.92,1],[0.08,1],[0,0.6],[0.12,0.18]]}},
+    {x:-1.6, y:9.1, w:3.2, h:2.6, shape:{kind:"ellipse", col:"#e8c9a0", gloss:0.4}},
+    ...eyePair([-0.75, 0.75], 10.0, 0.7, 0.8, COL.ink),
+    {x:-2.5, y:12.0, w:5.0, h:1.9, shape:{kind:"blob", col:hoodColor, gloss:0.3,
+      pts:[[0.5,0],[0.9,0.3],[1,1],[0,1],[0.1,0.3]]}, group:"hood"},
+    // lantern arm, and the lantern itself with a warm pool of light around it
+    {x:2.2, y:1.6, w:1.2, h:2.8, shape:{kind:"capsule", col:hoodColor, gloss:0.3}, group:"armR"},
+    {x:0.9, y:-0.8, w:3.8, h:3.8, shape:{kind:"glow", col:"#ffcf6b", alpha:0.6}, group:"lantern"},
+    {x:1.9, y:0.1, w:1.8, h:2.0, shape:{kind:"rrect", r:0.3, col:"#f5b942", gloss:0.85}, group:"lantern"},
+    {x:2.35, y:2.0, w:0.9, h:0.5, shape:{kind:"capsule", col:hoodColor, gloss:0.2}, group:"lantern"},
   ];
 }
 function merchantParts(){ return robedNpcParts(MERCHANT_ROBE_PAL, "#5a3d28"); }
@@ -2238,6 +2421,26 @@ function questNpcPalette(hex){
 }
 
 /* ---------- generic animated draw ---------- */
+// a soft contact shadow on the ground beneath a creature - the single cheapest thing that
+// stops everything looking like it's floating. Fliers (bat, ghost, wisp) get a smaller,
+// fainter one set a little lower, which reads as "hovering above the floor".
+function drawContactShadow(ctx, x, y, radius, kind, bob){
+  const flier = (kind==="bat" || kind==="ghost" || kind==="wisp");
+  const rx = radius * (flier ? 0.78 : 1.05);
+  const ry = rx * 0.42;
+  const cy = y + (flier ? 5 : 2);
+  const a = (flier ? 0.20 : 0.32) * (1 - Math.min(0.35, (bob||0)*0.06));
+  const g = ctx.createRadialGradient(x, cy, 0, x, cy, Math.max(1, rx));
+  g.addColorStop(0, "rgba(18,10,6,"+a.toFixed(3)+")");
+  g.addColorStop(0.6, "rgba(18,10,6,"+(a*0.5).toFixed(3)+")");
+  g.addColorStop(1, "rgba(18,10,6,0)");
+  ctx.save();
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(x, cy, Math.max(1,rx), Math.max(0.6,ry), 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
 function drawCreature(ctx, kind, ent, camx, camy){
   if(!Number.isFinite(ent.x) || !Number.isFinite(ent.y)) return;
   const t = ent.animT||0;
@@ -2253,6 +2456,12 @@ function drawCreature(ctx, kind, ent, camx, camy){
 
   if(ent.hurtTimer>0){ bob += Math.sin(ent.hurtTimer*60)*0.4; }
 
+  // ground shadow first, under everything, faded out as a dying creature dissolves
+  if(!ent.dying || ent.dieT<0.35){
+    const shadowR = (ent.radius || 11) * (kind==="boss" ? 1.5 : 1);
+    drawContactShadow(ctx, sx, sy, shadowR, kind, bob);
+  }
+
   if(kind==="player"){
     const wpn = getEffectiveWeapon();
     const legSwing = moving? Math.sin(walkPhase)*1.6 : 0;
@@ -2262,6 +2471,9 @@ function drawCreature(ctx, kind, ent, camx, camy){
     groupOffset.earR = {dx: Math.sin(t*3+1.2)*0.25};
     groupOffset.armL = {dy: moving? Math.max(0,-legSwing)*0.6:0};
     groupOffset.armR = {dy: moving? Math.max(0,legSwing)*0.6:0};
+    // the tail counter-swings against the stride, and idles with a slow lazy sway
+    groupOffset.tail = {dx: Math.sin(walkPhase*0.5+1.1)*(moving?0.5:0.22),
+                        dy: Math.sin(walkPhase+0.7)*(moving?0.35:0.16)};
 
     if(ent.attackTimer>0){
       const p = 1 - clamp(ent.attackTimer/wpn.duration, 0, 1);
@@ -3106,13 +3318,22 @@ function buildAnimalRow(){
     drawAnimalIcon(btn.querySelector(".animal-icon-canvas").getContext("2d"), animal.id);
   });
 }
+// the animal picker's portrait - built from the very same ear/face shape rig the in-game
+// character uses (just ears + head, scaled to the little 32px canvas), so what you pick on
+// the menu is exactly the face you play with
 function drawAnimalIcon(ctx, animalId){
   const animal = ANIMALS[animalId] || ANIMALS.bunny;
-  const pal = playerBodyPalette(animalId);
-  const earGrid = SPRITES[animal.earSprite] || SPRITES.earBunny;
-  drawPixelSprite(ctx, earGrid, pal, 3, 2, 8, 11);
-  drawPixelSprite(ctx, earGrid, pal, 21, 2, 8, 11);
-  drawPixelSprite(ctx, SPRITES.head, pal, 6, 9, 20, 20);
+  const fur = tonesFrom(animal.furColor);
+  const e = animal.ear;
+  const parts = [
+    ...earParts(animal, fur, -2.35 - e.w*0.15, 10.4, "earL"),
+    ...earParts(animal, fur, 0.35 + e.w*0.15, 10.4, "earR"),
+    ...faceParts(animal, fur, false, false),
+  ];
+  // tall-eared animals need a little more headroom in the same box; the origin is placed so
+  // the very tip of the ears lands just inside the top edge of the 32px canvas
+  const s = e.h > 4 ? 0.62 : 0.78;
+  drawParts(ctx, parts, 16, (10.4 + e.h)*U*s + 2, {sx:s, sy:s});
 }
 function buildClassSelect(){
   const grid = document.getElementById("classGrid");
@@ -3132,8 +3353,9 @@ function buildClassSelect(){
     const iconCanvas = btn.querySelector(".class-icon-canvas");
     const ictx = iconCanvas.getContext("2d");
     ictx.save();
-    ictx.translate(22, 32);
-    drawWeaponIcon(ictx, cls.weapon);
+    // drawWeaponIcon centers on the origin, so aim at the middle of the 44px icon canvas
+    ictx.translate(22, 22);
+    drawWeaponIcon(ictx, cls.weapon, 36);
     ictx.restore();
   });
 }
@@ -4875,8 +5097,17 @@ function render(){
   ctx.translate(-camX+sx, -camY+sy);
   renderTiles();
   renderDecor();
-  const visibleTorches = torches.filter(t=>t.x>=camX-60 && t.x<=camX+VIEWW+60 && t.y>=camY-60 && t.y<=camY+VIEWH+60);
-  const drawList = [...items.map(it=>({it})), ...enemies.map(e=>({e})), ...visibleTorches.map(tc=>({tc})), {p:player}];
+  // Cull to what's actually on screen before building the draw list. The old flat-rect art
+  // was cheap enough to just draw everything every frame; a shaded shape costs far more
+  // (gradients, gloss, stroke per part), so anything off-camera has to be skipped.
+  const onScreen = (o, pad)=> o.x>=camX-pad && o.x<=camX+VIEWW+pad && o.y>=camY-pad && o.y<=camY+VIEWH+pad;
+  const visibleTorches = torches.filter(t=>onScreen(t,60));
+  const drawList = [
+    ...items.filter(it=>onScreen(it,40)).map(it=>({it})),
+    ...enemies.filter(e=>onScreen(e,70)).map(e=>({e})),
+    ...visibleTorches.map(tc=>({tc})),
+    {p:player},
+  ];
   if(merchant) drawList.push({m:merchant});
   if(questNpc) drawList.push({n:questNpc});
   drawList.sort((a,b)=>{
@@ -4925,25 +5156,59 @@ function renderTiles(){
   const y0 = Math.max(0, Math.floor(camY/TILE)-1);
   const x1 = Math.min(MAPW, Math.ceil((camX+VIEWW)/TILE)+1);
   const y1 = Math.min(MAPH, Math.ceil((camY+VIEWH)/TILE)+1);
+  // one set of tile-local gradients reused by every wall on screen (see the wall branch)
+  const faceGrad = ctx.createLinearGradient(0, 2, 0, TILE-4);
+  faceGrad.addColorStop(0, towardsWhite(biome.wallFace, 0.16));
+  faceGrad.addColorStop(0.55, biome.wallFace);
+  faceGrad.addColorStop(1, shadeTone(biome.wallFace, 0.28));
+  const capGrad = ctx.createLinearGradient(0, 2, 0, 7);
+  capGrad.addColorStop(0, towardsWhite(biome.wallTop, 0.2));
+  capGrad.addColorStop(1, biome.wallTop);
+  const dropGrad = ctx.createLinearGradient(0, TILE, 0, TILE+7);
+  dropGrad.addColorStop(0, "rgba(20,12,8,0.34)");
+  dropGrad.addColorStop(1, "rgba(20,12,8,0)");
   for(let ty=y0;ty<y1;ty++){
     for(let tx=x0;tx<x1;tx++){
       const t = map[ty][tx];
       const px=tx*TILE, py=ty*TILE;
       if(t===WALL){
+        // a wall block reads as a lit slab: dark base, a face shaded top-lit to bottom-dark,
+        // and a bright cap along the top edge where the light actually lands. The gradients
+        // are built once per frame in tile-local space (see above) and moved into place by
+        // translating the context - building them per tile was by far the costliest thing
+        // on screen, and every wall tile's gradient is identical anyway.
         ctx.fillStyle=biome.wall;
         ctx.fillRect(px,py,TILE,TILE);
-        ctx.fillStyle=biome.wallFace;
-        ctx.fillRect(px+2,py+2,TILE-4,TILE-6);
-        ctx.fillStyle=biome.wallTop;
-        ctx.fillRect(px+2,py+2,TILE-4,3);
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.fillStyle=faceGrad;
+        ctx.fillRect(2,2,TILE-4,TILE-6);
+        ctx.fillStyle=capGrad;
+        ctx.fillRect(2,2,TILE-4,4);
+        // the floor tile below a wall picks up a soft contact shadow at its top edge
+        if(ty+1<MAPH && map[ty+1][tx]!==WALL){
+          ctx.fillStyle=dropGrad;
+          ctx.fillRect(0, TILE, TILE, 7);
+        }
+        ctx.restore();
       } else {
         ctx.fillStyle = ((tx+ty)%2===0) ? biome.floorA : biome.floorB;
         ctx.fillRect(px,py,TILE,TILE);
+        // a faint, deterministic grain per tile so large floors don't read as a flat checker
+        const n = ((tx*73856093) ^ (ty*19349663)) >>> 0;
+        ctx.fillStyle = (n & 1) ? "rgba(255,255,255,0.045)" : "rgba(0,0,0,0.045)";
+        ctx.fillRect(px + (n>>3)%(TILE-8), py + (n>>11)%(TILE-8), 5, 4);
+        ctx.fillStyle = "rgba(0,0,0,0.035)";
+        ctx.fillRect(px + (n>>17)%(TILE-6), py + (n>>23)%(TILE-6), 3, 3);
         if(t===STAIRS){
           ctx.fillStyle=biome.stairsBg;
-          ctx.fillRect(px+4,py+4,TILE-8,TILE-8);
-          ctx.fillStyle=COL.amber;
-          ctx.fillRect(px+9,py+9,TILE-18,TILE-18);
+          fillSoftRect(ctx, px+4, py+4, TILE-8, TILE-8);
+          const gg = ctx.createRadialGradient(px+TILE/2, py+TILE/2, 1, px+TILE/2, py+TILE/2, TILE*0.45);
+          gg.addColorStop(0, hexA(towardsWhite(COL.amber,0.5), 0.95));
+          gg.addColorStop(0.55, hexA(COL.amber, 0.85));
+          gg.addColorStop(1, hexA(COL.amber, 0));
+          ctx.fillStyle=gg;
+          ctx.fillRect(px+2, py+2, TILE-4, TILE-4);
         }
       }
     }
@@ -5055,48 +5320,46 @@ function renderItem(it){
     ctx.fillStyle=grd; ctx.fillRect(it.x-26,it.y-26,52,52);
   }
 }
+// the unit-space bounding box of a part list, used to auto-fit an icon into a target size
+// no matter how differently proportioned the thing is (a spear vs. a pair of gauntlets)
+function partsBounds(parts){
+  let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+  for(const p of parts){
+    if(p.x<minX) minX=p.x;
+    if(p.x+p.w>maxX) maxX=p.x+p.w;
+    if(p.y<minY) minY=p.y;
+    if(p.y+p.h>maxY) maxY=p.y+p.h;
+  }
+  return {minX, maxX, minY, maxY, w:maxX-minX, h:maxY-minY};
+}
+// draws a part list centered on (cx,cy), scaled so its longest side fits `target` pixels -
+// icons reuse the exact same shapes the equipped item is drawn with in-world. Fitting the
+// longer side (not just height) matters for the wide, short ones: gauntlets are 7.5 units
+// across but under 2 tall, and fitting those by height alone would blow them far outside
+// the icon box.
+function drawPartsFitted(ctx, parts, cx, cy, target){
+  const b = partsBounds(parts);
+  if(!(b.w>0) || !(b.h>0)) return;
+  const s = target / (Math.max(b.w, b.h)*U);
+  // drawParts translates first and scales second, so the centering offsets are pre-scale
+  const midX = (b.minX + b.maxX)/2, midY = (b.minY + b.maxY)/2;
+  drawParts(ctx, parts, cx - midX*U*s, cy + midY*U*s, {sx:s, sy:s});
+}
+// weapon icons (class select, and the pickups lying on the floor) are literally the same
+// shapes the character swings, just fitted into a small box
+function drawWeaponIcon(ctx, type, targetH){
+  drawPartsFitted(ctx, weaponParts(type), 0, 0, targetH || 30);
+}
+// a compact armor emblem - helmet over a chest plate, in that set's own colors
 function drawArmorIcon(key){
   const a = ARMOR_SETS[key] || ARMOR_SETS.traveler;
-  ctx.fillStyle = a.chest; fillSoftRect(ctx,-7,-6,14,13);
-  ctx.fillStyle = a.chestTrim; fillSoftRect(ctx,-7,-6,14,3);
-  ctx.fillStyle = a.helmet; fillSoftRect(ctx,-5,-15,10,9);
-  ctx.fillStyle = COL.ink; fillSoftRect(ctx,-2.5,-11,1.5,1.5); fillSoftRect(ctx,1,-11,1.5,1.5);
-}
-function drawWeaponIcon(ctx, type){
-  if(type==="spear"){
-    ctx.fillStyle="#c9a86e"; fillSoftRect(ctx,-2,-14,3,20);
-    ctx.fillStyle="#e8eef2"; fillSoftRect(ctx,-3,-20,5,7);
-  } else if(type==="axe"){
-    ctx.fillStyle=COL.boots; fillSoftRect(ctx,-2,-2,3,18);
-    ctx.fillStyle="#b3bcc7"; fillSoftRect(ctx,-9,-14,10,10);
-    ctx.fillStyle="#8a97a8"; fillSoftRect(ctx,-9,-14,10,3);
-  } else if(type==="hammer"){
-    ctx.fillStyle="#8a5a44"; fillSoftRect(ctx,-2,-2,3,18);
-    ctx.fillStyle="#9aa7b5"; fillSoftRect(ctx,-10,-16,16,10);
-    ctx.fillStyle="#cfd8e3"; fillSoftRect(ctx,-10,-16,16,3);
-  } else if(type==="staff"){
-    ctx.fillStyle="#5a3d28"; fillSoftRect(ctx,-2,-16,3,22);
-    ctx.fillStyle="#b19bff"; ctx.beginPath(); ctx.arc(0,-18,5,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle="rgba(255,255,255,0.65)"; ctx.beginPath(); ctx.arc(-1.6,-19.6,1.8,0,Math.PI*2); ctx.fill();
-  } else if(type==="bow"){
-    ctx.strokeStyle="#8a5a44"; ctx.lineWidth=2.4; ctx.lineCap="round";
-    ctx.beginPath(); ctx.arc(-3,-1,16,-1.0,1.0); ctx.stroke();
-    ctx.strokeStyle="#e8eef2"; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(5.6,-14.5); ctx.lineTo(5.6,12.5); ctx.stroke();
-  } else if(type==="gauntlets"){
-    ctx.fillStyle="#cfae4a"; fillSoftRect(ctx,-11,-8,9,9); fillSoftRect(ctx,2,-8,9,9);
-    ctx.fillStyle="#8a6a1a"; fillSoftRect(ctx,-11,-8,9,2.5); fillSoftRect(ctx,2,-8,9,2.5);
-  } else if(type==="greatsword"){
-    ctx.fillStyle=COL.metal; fillSoftRect(ctx,-3,-20,6,24);
-    ctx.fillStyle=COL.metalDark; fillSoftRect(ctx,-8,2,16,4);
-  } else if(type==="nunchaku"){
-    ctx.fillStyle="#5a3d28"; fillSoftRect(ctx,-9,-10,6,14);
-    ctx.fillStyle="#5a3d28"; fillSoftRect(ctx,3,-10,6,14);
-    ctx.fillStyle="#2a2a2a"; fillSoftRect(ctx,-3,-4,6,4);
-  } else {
-    ctx.fillStyle=COL.metal; fillSoftRect(ctx,-2,-18,4,20);
-    ctx.fillStyle=COL.metalDark; fillSoftRect(ctx,-6,0,12,4);
-  }
+  const shine = (a.hasShield || key==="kingsbane" || key==="bramble") ? 0.75 : 0.45;
+  drawPartsFitted(ctx, [
+    {x:-2.4, y:0, w:4.8, h:3.9, shape:{kind:"rrect", r:0.34, col:a.chest, gloss:shine}},
+    {x:-1.1, y:3.0, w:2.2, h:0.7, shape:{kind:"rrect", r:0.4, col:a.chestTrim, gloss:0.4}},
+    {x:-1.9, y:3.7, w:3.8, h:2.3, shape:{kind:"blob", col:a.helmet, gloss:shine,
+      pts:[[0.5,0],[0.88,0.16],[1,0.62],[1,1],[0,1],[0,0.62],[0.12,0.16]]}},
+  ], 0, 0, 26);
 }
 // a small ring at the player's feet showing dash cooldown - a dark wedge covers the portion
 // still cooling down and shrinks away as it recovers; once ready it flashes to a bright outline
