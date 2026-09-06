@@ -127,6 +127,27 @@
     transition:background .1s ease;
   }
 
+  .dashbtn{
+    position:absolute;
+    right:14px; bottom:14px;
+    width:64px; height:64px;
+    border-radius:50%;
+    background:rgba(245,185,66,.85);
+    border:2px solid rgba(255,255,255,.65);
+    box-shadow:0 2px 6px rgba(0,0,0,.35);
+    color:var(--ink);
+    font-family:"Silkscreen",monospace;
+    font-size:11px;
+    font-weight:700;
+    touch-action:none;
+    -webkit-user-select:none; user-select:none;
+    z-index:5;
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .08s ease, opacity .12s ease;
+  }
+  .dashbtn[hidden]{ display:none; }
+  .dashbtn:active{ transform:scale(0.9); }
+
   .overlay{
     position:absolute; inset:0;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -222,6 +243,11 @@
   .bump-icon .bunny{ width:16px; height:16px; border-radius:4px; background:var(--coral); }
   .bump-icon .bolt{ font-family:"Silkscreen",monospace; font-size:13px; color:var(--amber); }
   .bump-icon .foe{ width:14px; height:14px; border-radius:50%; background:#7bd68a; }
+
+  .dash-icon{ display:flex; align-items:center; gap:2px; }
+  .dash-icon .streak{ width:9px; height:3px; background:rgba(246,236,217,.55); border-radius:2px; }
+  .dash-icon .streak.short{ width:5px; }
+  .dash-icon .bunny2{ width:16px; height:16px; border-radius:4px; background:var(--coral); }
 
   .stairs-icon{ width:26px; height:26px; border-radius:4px; background:#1c1524; display:flex; align-items:center; justify-content:center; }
   .stairs-icon i{ width:14px; height:14px; background:var(--amber); border-radius:2px; }
@@ -559,6 +585,10 @@
           <p>Get close and you <b>attack automatically</b><span class="sub">no attack button - range and arc depend on your weapon</span></p>
         </div>
         <div class="howto-row">
+          <div class="howto-icon dash-icon"><span class="streak short"></span><span class="streak"></span><span class="bunny2"></span></div>
+          <p><b>Space, left-click, or the DASH button</b> to dash<span class="sub">a quick invulnerable burst - great for closing in on ranged enemies</span></p>
+        </div>
+        <div class="howto-row">
           <div class="howto-icon"><div class="stairs-icon"><i></i></div></div>
           <p>Find the <b>glowing stairs</b> to descend<span class="sub">15 floors across 3 realms - stone, forest &amp; tide - each ending in a boss</span></p>
         </div>
@@ -644,6 +674,7 @@
     <div class="joystick" id="joystick" hidden>
       <div class="joybase"><div class="joyknob" id="joyknob"></div></div>
     </div>
+    <button type="button" class="dashbtn" id="dashBtn" hidden>DASH</button>
   </div>
 
   <div class="hud">
@@ -866,6 +897,9 @@ const SPRITES = {
     "..osssssso..",
   ],
   merchantRobe: ["..ohhho..",".ohhhhho.","obbbbbbbo","obbbbbbbo","obbbbbbbo","obbbbbbbo","ossssssso","obtttttbo",".ooooooo."],
+  // wisp: a small glowing orb enemy, recolored per biome (see wispParts) - a slow-moving
+  // ranged threat that keeps its distance and lobs projectiles instead of chasing to melee
+  wisp: ["..ohho..",".ohhhho.","ohhbbbho","ohbccbho","ohbccbho","ohhbbbho",".ohhhho.","..ohho.."],
 };
 // fixed (non-recolorable) sprite + palette pairs for weapons - each weapon has one look
 const WEAPON_SPRITES = {
@@ -927,17 +961,17 @@ const BIOMES = [
     wall:"#8a5a3a", wallFace:"#a8734a", wallTop:"#d9ab68",
     floorA:"#dcb37c", floorB:"#cc9e6a", stairsBg:"#6b4527",
     decorTypes:["bone","crack","moss","rubble","shrub"], ambient:"torch",
-    slimeHues:[COL.slime,"#7bc8d6","#e8a6d0","#c9d67b"] },
+    slimeHues:[COL.slime,"#7bc8d6","#e8a6d0","#c9d67b"], wispHue:"#b19bff" },
   { key:"forest", range:[6,10],   name:"Shadowfen Forest",  bossKind:"treant",
     wall:"#4a7a3a", wallFace:"#5c9448", wallTop:"#96d968",
     floorA:"#82b25c", floorB:"#71a24e", stairsBg:"#3a5c28",
     decorTypes:["stump","fern","mushroom","shrub","rubble"], ambient:"firefly",
-    slimeHues:["#6b8f4e","#8fae55","#4d6b37","#a3c96b"] },
+    slimeHues:["#6b8f4e","#8fae55","#4d6b37","#a3c96b"], wispHue:"#8fd694" },
   { key:"water", range:[11,15],   name:"The Sunken Shoals", bossKind:"kraken",
     wall:"#2a8fa8", wallFace:"#3aa8c2", wallTop:"#7fdcec",
     floorA:"#55cfdf", floorB:"#41bacb", stairsBg:"#1c6b7a",
     decorTypes:["shell","kelp","driftwood","rubble"], ambient:"glow",
-    slimeHues:["#3a7ea8","#4fa8c9","#2a5f7a","#6bc9d6"] },
+    slimeHues:["#3a7ea8","#4fa8c9","#2a5f7a","#6bc9d6"], wispHue:"#7fdcec" },
 ];
 function getBiome(floor){
   for(const b of BIOMES){ if(floor>=b.range[0] && floor<=b.range[1]) return b; }
@@ -1225,6 +1259,15 @@ function ghostParts(){
   return p;
 }
 
+function wispParts(hue){
+  const c = hue || "#b19bff";
+  const t = tonesFrom(c);
+  const pal = {o:t.out, h:t.hi, b:t.base, c:towardsWhite(c,0.6)};
+  return [
+    {x:-3.2,y:0,w:6.4,h:6.4,sprite:{grid:SPRITES.wisp,palette:pal}, group:"body"},
+  ];
+}
+
 function bossParts(kind){
   const b = BOSSES[kind] || BOSSES.boss;
   const t = tonesFrom(b.bodyColor);
@@ -1349,6 +1392,14 @@ function drawCreature(ctx, kind, ent, camx, camy){
       flip: ent.facing<0, groupOffset, alpha:(ent.dying? Math.max(0,1-ent.dieT/0.4):0.88),
       flash: ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)):0,
     });
+  } else if(kind==="wisp"){
+    const pulse = 1+Math.sin(t*3)*0.1;
+    groupOffset.body = {dy: Math.sin(t*2)*0.5};
+    drawParts(ctx, wispParts(ent.hue), sx, sy + Math.sin(t*1.6)*2.4, {
+      flip: ent.facing<0, groupOffset, sx:pulse, sy:pulse,
+      flash: ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)):(ent.attackTimer>0?0.4:0),
+      alpha: ent.dying? Math.max(0,1-ent.dieT/0.4):1,
+    });
   } else if(kind==="merchant"){
     const sway = Math.sin(t*1.6);
     groupOffset.robe = {dx: sway*0.15};
@@ -1374,6 +1425,7 @@ const TILE = 32;
 const MAPW = 46, MAPH = 34;
 const WALL=0, FLOOR=1, STAIRS=2;
 const VIEWW = 640, VIEWH = 416;
+const DASH_DURATION = 0.14, DASH_COOLDOWN = 1.4, DASH_DISTANCE = TILE*2;
 
 let state = "title"; // title | playing | dead | win
 let floorNum = 1;
@@ -1588,6 +1640,17 @@ function nearestFloorPixel(px,py){
   }
   return {x:px,y:py};
 }
+// samples along the segment at half-tile steps so ranged attacks (player auto-targeting,
+// enemy volleys) can't hit through a wall even when the target is within nominal range
+function hasLineOfSight(x1,y1,x2,y2){
+  const dist = Math.hypot(x2-x1, y2-y1);
+  const steps = Math.max(1, Math.ceil(dist/(TILE*0.5)));
+  for(let i=1;i<steps;i++){
+    const t = i/steps;
+    if(solidAt(x1+(x2-x1)*t, y1+(y2-y1)*t)) return false;
+  }
+  return true;
+}
 
 /* ---------- spawning ---------- */
 function spawnFloor(){
@@ -1609,7 +1672,7 @@ function spawnFloor(){
     const r = choice(enemyRooms);
     const p = randPointInRoom(r);
     let types = ["slime","rat"];
-    if(biomeFloor>=2) types.push("bat");
+    if(biomeFloor>=2) types.push("bat","wisp");
     if(biomeFloor>=3) types.push("ghost","ghost");
     enemies.push(makeEnemy(choice(types), p.x, p.y));
   }
@@ -1695,6 +1758,7 @@ function makeEnemy(type,x,y,bossKind){
     rat:{hp:2+Math.floor(floorNum*0.4),dmg:dmgTier,speed:95,radius:10,contactCd:0.7},
     bat:{hp:2+Math.floor(floorNum*0.4),dmg:dmgTier,speed:105,radius:10,contactCd:0.7},
     ghost:{hp:4+Math.floor(floorNum*0.5),dmg:dmgTier+1,speed:55,radius:12,contactCd:0.9,noclip:true},
+    wisp:{hp:2+Math.floor(floorNum*0.3),dmg:dmgTier,speed:32,radius:9,contactCd:1.1,hue:biome.wispHue,rangedCd:rand(0.4,1.4)},
     boss: BOSSES[bossKind || "boss"],
   }[type];
   return Object.assign(base, stats, {maxhp:stats.hp, bossKind: type==="boss" ? (bossKind||"boss") : undefined});
@@ -1708,6 +1772,7 @@ function newPlayer(classId, animalId){
     baseMaxHp:BASE_MAX_HP,weapon:(cls&&cls.weapon)||"sword",armor:"traveler",
     classId: classId||null, animalId: ANIMALS[animalId] ? animalId : "bunny",
     animT:0,moving:false,hurtTimer:0,invuln:0,
+    moveDirX:1,moveDirY:0,dashT:0,dashCd:0,dashDirX:1,dashDirY:0,
     attackTimer:0,attackCd:0,swingAngle:0,swingHasHit:false,
     gold:0,dying:false,dieT:0,bossesDefeatedThisRun:0,cardsChosen:[],
     xp:0,level:1,xpToNext:6,pickupRadius:18,regenAccum:0,
@@ -1767,6 +1832,7 @@ function toast(msg){
 window.addEventListener("keydown", e=>{
   keys[e.key.toLowerCase()]=true;
   if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(e.key.toLowerCase())) e.preventDefault();
+  if(e.key===" " && !e.repeat) triggerDash();
 
   // keyboard-only shortcuts: number keys pick a class, level-up card or shop offer, Escape backs out
   const classSelectOpen = !document.getElementById("ov-classselect").hidden;
@@ -1792,6 +1858,9 @@ window.addEventListener("keyup", e=>{ keys[e.key.toLowerCase()]=false; });
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
+canvas.addEventListener("mousedown", e=>{
+  if(e.button===0) triggerDash();
+});
 
 function startGame(classId){
   Audio1.unlock();
@@ -2201,9 +2270,12 @@ const joystick = document.getElementById("joystick");
 const joyknob = document.getElementById("joyknob");
 let joyVec = {x:0,y:0}, joyActive = false, joyPointerId = null, joyCenter = {x:0,y:0};
 const JOY_RADIUS = 40;
+const dashBtn = document.getElementById("dashBtn");
+dashBtn.addEventListener("pointerdown", e=>{ e.preventDefault(); triggerDash(); });
 
 function updateTouchControls(){
   joystick.hidden = !(isTouchDevice && state==="playing");
+  dashBtn.hidden = !(isTouchDevice && state==="playing");
 }
 window.addEventListener("resize", updateTouchControls);
 
@@ -2283,6 +2355,22 @@ function moveWithCollision(ent, dx, dy){
   }
 }
 
+// a short burst of movement (2 tiles) toward whatever direction the player last moved,
+// with brief invulnerability - lets melee builds punch through a ranged enemy's volley
+// to close the distance instead of only having a slow walk to work with
+function triggerDash(){
+  if(state!=="playing" || !player || player.dying) return;
+  if(player.dashCd>0 || player.dashT>0) return;
+  let dx = player.moveDirX||0, dy = player.moveDirY||0;
+  if(dx===0 && dy===0){ dx = player.facing; dy = 0; }
+  const len = Math.hypot(dx,dy)||1;
+  player.dashDirX = dx/len; player.dashDirY = dy/len;
+  player.dashT = DASH_DURATION;
+  player.dashCd = DASH_COOLDOWN;
+  player.invuln = Math.max(player.invuln, DASH_DURATION+0.05);
+  burst(player.x, player.y, "#fff", 10, {maxSp:60,up:10});
+  Audio1.upgrade();
+}
 function update(dt){
   if(toastTimer>0){ toastTimer-=dt; if(toastTimer<=0) document.getElementById("toast").classList.remove("show"); }
   if(merchant) merchant.animT += dt;
@@ -2305,6 +2393,20 @@ function update(dt){
   const moving = rawLen > 0.08;
   player.moving = moving && player.attackTimer<=0;
   if(moving){
+    player.moveDirX = mx/(rawLen||1); player.moveDirY = my/(rawLen||1);
+  }
+  if(player.dashCd>0) player.dashCd -= dt;
+  if(player.dashT>0){
+    // dash overrides normal input for its short duration - a burst of fast, collision-safe
+    // movement (same moveWithCollision as regular walking, just much faster) in whatever
+    // direction was last held, with brief invulnerability granted when the dash was triggered
+    player.dashT -= dt;
+    const dashSpeed = DASH_DISTANCE/DASH_DURATION;
+    moveWithCollision(player, player.dashDirX*dashSpeed*dt, player.dashDirY*dashSpeed*dt);
+    player.moving = true;
+    if(player.dashDirX!==0) player.facing = player.dashDirX>0?1:-1;
+    player.facingDir = (Math.abs(player.dashDirY)>Math.abs(player.dashDirX) && player.dashDirY<0) ? "back" : "front";
+  } else if(moving){
     const wpn = getEffectiveWeapon();
     const dirLen = rawLen||1;
     const inputMag = Math.min(rawLen,1);
@@ -2336,6 +2438,10 @@ function update(dt){
 
     if(en.type==="boss"){
       updateBoss(en, dt, d2);
+      continue;
+    }
+    if(en.type==="wisp"){
+      updateWisp(en, dt, d2);
       continue;
     }
 
@@ -2447,7 +2553,17 @@ function update(dt){
   }
 }
 
+// each boss has its own moveset; updateBoss just dispatches to the right one and always
+// resolves contact damage afterward regardless of which pattern is active
 function updateBoss(en, dt, d2){
+  if(en.bossKind==="treant") updateBossTreant(en, dt, d2);
+  else if(en.bossKind==="kraken") updateBossKraken(en, dt, d2);
+  else updateBossKing(en, dt, d2);
+  handleContact(en);
+}
+// Bramble King (dungeon): a straightforward melee rusher - closes in, then telegraphs and
+// charges in a straight line for heavy contact damage.
+function updateBossKing(en, dt, d2){
   en.chargeT = en.chargeT||0;
   en.telegraphT = en.telegraphT||0;
   if(en.charging){
@@ -2470,9 +2586,149 @@ function updateBoss(en, dt, d2){
       en.telegraphT = Math.random()<0.006 ? 0.6 : 0;
     }
   }
+}
+// Elder Bramblewood (forest): never charges - lobs a slow 3-thorn volley at mid range, or
+// telegraphs a short-range root slam (AOE burst, no dash) if the player presses in close.
+function updateBossTreant(en, dt, d2){
+  en.rangedCd = en.rangedCd!=null ? en.rangedCd : rand(1,2);
+  en.slamCd = en.slamCd!=null ? en.slamCd : 1;
+  en.telegraphT = en.telegraphT||0;
+  en.telegraphKind = en.telegraphKind||null;
+  en.rangedCd -= dt; en.slamCd -= dt;
+  const d = Math.sqrt(d2)||1;
+
+  if(en.telegraphT>0){
+    en.telegraphT -= dt;
+    if(en.telegraphT<=0){
+      if(en.telegraphKind==="volley"){
+        const baseAng = Math.atan2(player.y-en.y, player.x-en.x);
+        for(let i=-1;i<=1;i++){
+          spawnEnemyProjectile(en, {angleOverride:baseAng+i*0.28, dmg:en.dmg, speed:110, radius:6, life:3, color:"#7fae55", knockback:6, kind:"orb"});
+        }
+        en.rangedCd = rand(2.6,3.4);
+      } else if(en.telegraphKind==="slam"){
+        if(dist2(en.x,en.y,player.x,player.y) < 130*130){
+          damagePlayer(en.x, en.y, en.dmg+1, 22);
+        }
+        shake(8,0.22);
+        burst(en.x,en.y-10,"#7fae55",18,{maxSp:150,up:50});
+        en.slamCd = rand(2.2,3);
+      }
+      en.telegraphKind = null;
+    }
+    return;
+  }
+  if(d < 100 && en.slamCd<=0){
+    en.telegraphT = 0.55; en.telegraphKind = "slam";
+  } else if(d < 320 && en.rangedCd<=0){
+    en.telegraphT = 0.5; en.telegraphKind = "volley";
+  } else if(d >= 320){
+    moveWithCollision(en, (player.x-en.x)/d*en.speed*dt, (player.y-en.y)/d*en.speed*dt);
+    en.moving = true;
+  } else {
+    moveWithCollision(en, (player.x-en.x)/d*en.speed*0.5*dt, (player.y-en.y)/d*en.speed*0.5*dt);
+    en.moving = true;
+  }
+  if(player.x!==en.x) en.facing = (player.x-en.x)>0?1:-1;
+}
+// Abyssal Tide (water): mostly keeps range and fires a 5-bubble fan, but punishes a player
+// who closes to melee range with a short, fast surge lunge instead of waiting them out.
+function updateBossKraken(en, dt, d2){
+  en.rangedCd = en.rangedCd!=null ? en.rangedCd : rand(1,1.8);
+  en.surgeCd = en.surgeCd!=null ? en.surgeCd : 1.5;
+  en.chargeT = en.chargeT||0;
+  en.telegraphT = en.telegraphT||0;
+  en.telegraphKind = en.telegraphKind||null;
+  en.rangedCd -= dt; en.surgeCd -= dt;
+  const d = Math.sqrt(d2)||1;
+
+  if(en.charging){
+    en.chargeT -= dt;
+    moveWithCollision(en, en.cx*260*dt, en.cy*260*dt);
+    if(en.chargeT<=0) en.charging = false;
+    if(player.x!==en.x) en.facing = (player.x-en.x)>0?1:-1;
+    return;
+  }
+  if(en.telegraphT>0){
+    en.telegraphT -= dt;
+    if(en.telegraphT<=0){
+      if(en.telegraphKind==="surge"){
+        const dd = Math.sqrt(dist2(en.x,en.y,player.x,player.y))||1;
+        en.cx=(player.x-en.x)/dd; en.cy=(player.y-en.y)/dd;
+        en.charging = true; en.chargeT = 0.3;
+        en.surgeCd = rand(2.2,3);
+      } else {
+        const baseAng = Math.atan2(player.y-en.y, player.x-en.x);
+        for(let i=-2;i<=2;i++){
+          spawnEnemyProjectile(en, {angleOverride:baseAng+i*0.22, dmg:en.dmg, speed:100, radius:7, life:3.2, color:"#7fdcec", knockback:5, kind:"orb"});
+        }
+        en.rangedCd = rand(2.6,3.4);
+      }
+      en.telegraphKind = null;
+    }
+    return;
+  }
+  if(d < 140 && en.surgeCd<=0){
+    en.telegraphT = 0.4; en.telegraphKind = "surge";
+  } else if(d < 420 && en.rangedCd<=0){
+    en.telegraphT = 0.55; en.telegraphKind = "volley";
+  } else if(d > 260){
+    moveWithCollision(en, (player.x-en.x)/d*en.speed*dt, (player.y-en.y)/d*en.speed*dt);
+    en.moving = true;
+  }
+  if(player.x!==en.x) en.facing = (player.x-en.x)>0?1:-1;
+}
+
+// wisp: a low-HP ranged enemy that keeps its distance and lobs a slow orb instead of
+// chasing to melee - backs away if the player closes in, drifts closer if too far to see,
+// and only fires when it actually has a clear line to the player (no shooting through walls)
+function updateWisp(en, dt, d2){
+  en.rangedCd -= dt;
+  const senseR = 260;
+  if(d2 < senseR*senseR){
+    const d = Math.sqrt(d2)||1;
+    const tx = (player.x-en.x)/d, ty = (player.y-en.y)/d;
+    if(d < 130){
+      moveWithCollision(en, -tx*en.speed*dt, -ty*en.speed*dt);
+      en.moving = true;
+    } else if(d > 220){
+      moveWithCollision(en, tx*en.speed*0.6*dt, ty*en.speed*0.6*dt);
+      en.moving = true;
+    }
+    if(tx!==0) en.facing = tx>0?1:-1;
+    if(en.rangedCd<=0 && hasLineOfSight(en.x,en.y,player.x,player.y)){
+      spawnEnemyProjectile(en, {dmg:en.dmg, speed:95, radius:6, life:2.8, color:en.hue, knockback:5, kind:"orb"});
+      en.rangedCd = rand(1.8,2.6);
+      en.attackTimer = 0.3;
+    }
+  } else {
+    en.wanderT -= dt;
+    if(en.wanderT<=0){
+      const a = Math.random()*Math.PI*2;
+      en.wanderDir = {x:Math.cos(a), y:Math.sin(a)};
+      en.wanderT = rand(1.2,2.2);
+    }
+    moveWithCollision(en, en.wanderDir.x*en.speed*0.4*dt, en.wanderDir.y*en.speed*0.4*dt);
+    en.moving = true;
+  }
   handleContact(en);
 }
 
+// shared player-damage path used by both contact hits and enemy projectiles - applies
+// armor/mod reduction, invuln window, knockback and the usual hit feedback (text/burst/shake/sfx)
+function damagePlayer(sourceX, sourceY, rawDmg, knockback){
+  const totalReduction = Math.min(0.75, player.mods.dmgReduction + (getArmor().dmgReduction||0));
+  const dmg = Math.max(1, Math.round(rawDmg*(1-totalReduction)));
+  player.hp -= dmg;
+  player.hurtTimer = 0.35; player.invuln = 0.9;
+  const ang = Math.atan2(player.y-sourceY, player.x-sourceX);
+  moveWithCollision(player, Math.cos(ang)*knockback, Math.sin(ang)*knockback);
+  floatText(player.x, player.y-26, "-"+dmg, "#ff9d9d");
+  burst(player.x,player.y-14,"#ff6f91",6,{maxSp:100,up:30});
+  shake(knockback>18?6:4, knockback>18?0.2:0.14);
+  Audio1.hurt();
+  return dmg;
+}
 function handleContact(en){
   const rr = (en.radius+player.radius);
   const touching = dist2(en.x,en.y,player.x,player.y) < rr*rr;
@@ -2480,17 +2736,8 @@ function handleContact(en){
 
   // enemy hits player (the player's own attacks are range/arc-based - see updatePlayerAttack)
   if(player.invuln<=0 && en.cooldown<=0 && !en.dying){
-    const totalReduction = Math.min(0.75, player.mods.dmgReduction + (getArmor().dmgReduction||0));
-    const dmg = Math.max(1, Math.round(en.dmg*(1-totalReduction)));
-    player.hp -= dmg;
-    player.hurtTimer = 0.35; player.invuln = 0.9;
     en.cooldown = en.contactCd;
-    const ang = Math.atan2(player.y-en.y, player.x-en.x);
-    moveWithCollision(player, Math.cos(ang)*14, Math.sin(ang)*14);
-    floatText(player.x, player.y-26, "-"+dmg, "#ff9d9d");
-    burst(player.x,player.y-14,"#ff6f91",6,{maxSp:100,up:30});
-    shake(5,0.16);
-    Audio1.hurt();
+    damagePlayer(en.x, en.y, en.dmg, 14);
     if(player.mods.thorns>0 && !en.dying){
       hitEnemy(en, player.mods.thorns, Math.atan2(en.y-player.y, en.x-player.x), 4);
     }
@@ -2560,7 +2807,7 @@ function updatePlayerAttack(dt){
     for(const en of enemies){
       if(en.dying) continue;
       const d = Math.hypot(en.x-player.x, en.y-player.y) - en.radius;
-      if(d<=wpn.range && d<bestD){ bestD=d; best=en; }
+      if(d<=wpn.range && d<bestD && hasLineOfSight(player.x,player.y,en.x,en.y)){ bestD=d; best=en; }
     }
     if(best){
       player.swingAngle = Math.atan2(best.y-player.y, best.x-player.x);
@@ -2619,13 +2866,30 @@ function spawnProjectile(wpn){
   }
   Audio1.hit();
 }
+// slow ranged attack used by wisps and boss volleys - aims at the player by default, or at
+// opts.angleOverride for spread-fire patterns. Tagged from:"enemy" so updateProjectiles
+// resolves collisions against the player instead of against enemies.
+function spawnEnemyProjectile(en, opts){
+  const ang = opts.angleOverride!=null ? opts.angleOverride : Math.atan2(player.y-en.y, player.x-en.x);
+  projectiles.push({
+    x:en.x, y:en.y, vx:Math.cos(ang)*opts.speed, vy:Math.sin(ang)*opts.speed,
+    dmg:opts.dmg, radius:opts.radius||6, life:0, maxLife:opts.life||3,
+    color:opts.color||"#fff", knockback:opts.knockback||6, kind:opts.kind||"orb", from:"enemy",
+  });
+}
 function updateProjectiles(dt){
   for(let i=projectiles.length-1;i>=0;i--){
     const p = projectiles[i];
     p.life += dt;
     p.x += p.vx*dt; p.y += p.vy*dt;
     let dead = p.life>=p.maxLife || solidAt(p.x,p.y);
-    if(!dead){
+    if(!dead && p.from==="enemy"){
+      const rr = p.radius+player.radius;
+      if(player.invuln<=0 && dist2(p.x,p.y,player.x,player.y) < rr*rr){
+        damagePlayer(p.x, p.y, p.dmg, p.knockback);
+        dead = true;
+      }
+    } else if(!dead){
       for(const en of enemies){
         if(en.dying) continue;
         if(p.hitSet && p.hitSet.has(en)) continue;
@@ -2649,13 +2913,14 @@ function updateProjectiles(dt){
 function renderProjectiles(){
   for(const p of projectiles){
     if(!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
-    if(p.kind==="cast"){
-      const grd = ctx.createRadialGradient(p.x,p.y,1,p.x,p.y,10);
-      grd.addColorStop(0, p.color); grd.addColorStop(1, "rgba(177,155,255,0)");
+    if(p.kind==="cast" || p.kind==="orb"){
+      const rad = p.radius ? p.radius*1.4 : 10;
+      const grd = ctx.createRadialGradient(p.x,p.y,1,p.x,p.y,rad);
+      grd.addColorStop(0, p.color); grd.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = grd;
-      ctx.beginPath(); ctx.arc(p.x,p.y,10,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x,p.y,rad,0,Math.PI*2); ctx.fill();
       ctx.fillStyle = "#fff";
-      ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x,p.y,rad*0.3,0,Math.PI*2); ctx.fill();
     } else {
       const ang = Math.atan2(p.vy,p.vx);
       ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(ang);
