@@ -2,11 +2,11 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Baloo+2:wght@500;600;700;800&display=swap">
 <style>
   :root{
-    --void:#1b1025;
-    --void-deep:#120a1a;
-    --stone:#4a3b57;
-    --stone-dark:#392c44;
-    --floor:#2f2438;
+    --void:#4a3324;
+    --void-deep:#2e1f16;
+    --stone:#8a6a4a;
+    --stone-dark:#5a3d28;
+    --floor:#6b4a34;
     --parchment:#f6ecd9;
     --parchment-dark:#e8dbc2;
     --ink:#3a2b3f;
@@ -22,7 +22,7 @@
   body{
     margin:0;
     background:
-      radial-gradient(ellipse 900px 500px at 50% -10%, #2a1938 0%, transparent 60%),
+      radial-gradient(ellipse 900px 500px at 50% -10%, #e8a94f 0%, transparent 60%),
       var(--void);
     color:var(--ink);
     font-family:"Baloo 2", ui-rounded, "Segoe UI", sans-serif;
@@ -80,7 +80,7 @@
     overflow:hidden;
     box-shadow:
       inset 0 0 0 4px var(--stone-dark),
-      inset 0 0 0 8px #1a1220,
+      inset 0 0 0 8px #241609,
       0 2px 6px rgba(0,0,0,.4) inset;
     background:var(--void-deep);
   }
@@ -127,7 +127,7 @@
     text-align:center;
     padding:18px;
     gap:10px;
-    background:rgba(18,10,26,.72);
+    background:rgba(46,31,22,.72);
     backdrop-filter:blur(1px);
     color:var(--parchment);
     transition:opacity .35s ease;
@@ -712,26 +712,71 @@ function drawParts(ctx, parts, ox, oy, opts){
     const y = (p.y + (off && off.dy||0)) * U;
     const w = p.w * U, h = p.h * U;
     const rot = (off && off.rot) || 0;
-    ctx.fillStyle = flashWhite>0 ? towardsWhite(p.c, flashWhite) : p.c;
+    const drawIt = ()=>{
+      if(p.sprite){
+        drawPixelSprite(ctx, p.sprite.grid, p.sprite.palette, x, -y-h, Math.max(1,w), Math.max(1,h), {flash:flashWhite});
+      } else {
+        ctx.fillStyle = flashWhite>0 ? towardsWhite(p.c, flashWhite) : p.c;
+        fillSoftRect(ctx, x, -y-h, Math.max(1,w), Math.max(1,h));
+      }
+    };
     // draw with y growing up -> canvas y is -y-h
     if(rot){
       ctx.save();
       ctx.translate(pivotX, pivotY);
       ctx.rotate(rot);
       ctx.translate(-pivotX, -pivotY);
-      fillSoftRect(ctx, x, -y-h, Math.max(1,w), Math.max(1,h));
+      drawIt();
       ctx.restore();
     } else {
-      fillSoftRect(ctx, x, -y-h, Math.max(1,w), Math.max(1,h));
+      drawIt();
     }
   }
   ctx.restore();
 }
+// Draws a small hand-authored pixel-art bitmap ("grid": array of equal-length strings,
+// one character per pixel, "." = transparent) scaled to fill a w x h box. Each character
+// looks itself up in "palette" (char -> hex). Used for every character/weapon/armor/tile
+// sprite so they read as real shaded pixel art instead of flat single-color rects.
+function drawPixelSprite(ctx, grid, palette, x, y, w, h, opts){
+  opts = opts || {};
+  const flash = opts.flash || 0;
+  const rows = grid.length, cols = grid[0].length;
+  const cw = w/cols, ch = h/rows;
+  for(let r=0;r<rows;r++){
+    const row = grid[r];
+    for(let c=0;c<cols;c++){
+      const key = row[c];
+      if(key===".") continue;
+      let color = palette[key];
+      if(!color) continue;
+      if(flash>0) color = towardsWhite(color, flash);
+      ctx.fillStyle = color;
+      ctx.fillRect(x + c*cw - 0.4, y + r*ch - 0.4, cw+0.8, ch+0.8);
+    }
+  }
+}
+// darkens a base hex toward black by a ratio - the shadow-tone sibling of towardsWhite(),
+// used to auto-derive shadow/highlight shades for recolorable sprites (e.g. armor sets
+// that share one shape but each need their own base color shaded consistently)
+function shadeTone(hex, amt){
+  if(!hex || hex[0]!=="#") return hex;
+  const n = parseInt(hex.slice(1),16);
+  let r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  r=Math.round(r*(1-amt)); g=Math.round(g*(1-amt)); b=Math.round(b*(1-amt));
+  return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+// builds a {base, hi, sh, out} 4-tone ramp from one hex - the standard recipe every
+// recolorable pixel sprite (armor pieces, slime hues) uses to turn a single design
+// color into a full shaded palette without hand-picking shades per variant
+function tonesFrom(hex){
+  return { base:hex, hi:towardsWhite(hex,0.32), sh:shadeTone(hex,0.32), out:shadeTone(hex,0.62) };
+}
 
 /* ---------- creature templates ---------- */
 const COL = {
-  fur:"#f7ede2", furShade:"#e7d6c4", pink:"#ffb5c7", ink:"#2a1e30",
-  blush:"#ffc9d6", tunic:"#ff6f91", tunicDark:"#e2536f", boots:"#8a5a44",
+  fur:"#f7ede2", pink:"#ffb5c7", ink:"#2a1e30",
+  tunic:"#ff6f91", tunicDark:"#e2536f", boots:"#8a5a44",
   metal:"#d9e1ea", metalDark:"#9aa7b5",
   slime:"#7bd68a", slimeDark:"#57b26a", slimeCore:"#e9fff0",
   bat:"#8a6bb0", batDark:"#5f4783", fang:"#fff",
@@ -739,6 +784,78 @@ const COL = {
   ghost:"#e7defb", ghostDark:"#c9b8ee",
   boss:"#a558c9", bossDark:"#7a3c9c", crown:"#f5b942"
 };
+
+/* ---------- hand-authored pixel sprites ----------
+   Small ASCII-grid bitmaps drawn via drawPixelSprite(). Each grid uses "." for transparent
+   and otherwise-arbitrary single characters that are looked up in a palette object supplied
+   alongside the grid - the same grid can be recolored endlessly (armor sets, slime hues) by
+   swapping only the palette. Convention used throughout: o=outline, h=highlight, b=base,
+   s=shadow, with extra bespoke letters per sprite for secondary materials (eyes, trim, etc). */
+const SPRITES = {
+  // ---- player (shared rig, recolored per-part by playerBodyPalette) ----
+  head: ["..dddddd..",".dFFFFFFd.","dFFFFFFFFd","dFfffffffd","dffffffffd","dfeffffefd","dfkffffkfd","dsffffffsd",".dssssssd.","..dssssd.."],
+  ear:  [".dd.","dFFd","dFFd","dffd","dffd","dkkd","dssd",".dd."],
+  torso:[".jjjjjj.","jrrrrrrj","jJJJJJJj","jJuuuuJj","juuuuuuj","juuuuuuj","jvvvvvvj",".jvvvvj."],
+  arm:  ["dFd","dfd","dfd","dfd","dsd",".d."],
+  leg:  ["qQq","qoq","qoq","qoq","qoq","qwq",".q."],
+  // ---- armor (generic shapes, recolored per ARMOR_SETS entry) ----
+  helmet:  [".oooooo.","ohhhhhho","obbbbbbo"],
+  chest:   [".oooooo.","ohhhhhho","obbbbbbo","obbbbbbo","osssssso",".oooooo."],
+  shoulder:[".oo.","ohho",".oo."],
+  glove:   ["oho","obo",".o."],
+  shin:    [".oo.","ohho","obbo",".oo."],
+  // ---- enemies (recolored per hue/boss where noted) ----
+  slime: ["...oooo...",".ohhhhhho.","ohhhhbbbbo","obbccccbbo","obebbbbebo","osbbbbbbso",".osssssso.","...oooo..."],
+  batWingL: ["obbbb","ohhbb",".ohbb","..ob."],
+  batWingR: ["bbbbo","bbhho","bbho.",".bo.."],
+  batBody: [".o...o.","obo.obo","obbbbbo","obwbwbo","obbbbbo",".ossso."],
+  ratBody: [".o....o.","obbbbbbo","obebbbbo","obbbbbbo",".osssso."],
+  ghostBody: [".ohhhhhho.","ohhhhhhhho","obbbbbbbbo","obebbbbebo","obbbmmbbbo","osssssssso",".osssssso."],
+  ghostWave: ["oh","ob","ob","os"],
+  bossBody: [
+    "..ohhhhhho..",
+    ".ohhhhhhhho.",
+    "obbbbbbbbbbo",
+    "obbebbbbebbo",
+    "obbbmmmmbbbo",
+    "obbbbbbbbbbo",
+    "osssssssssso",
+    "obbbbbbbbbbo",
+    "obbbbbbbbbbo",
+    ".osssssssso.",
+    "..osssssso..",
+  ],
+  merchantRobe: ["..ohhho..",".ohhhhho.","obbbbbbbo","obbbbbbbo","obbbbbbbo","obbbbbbbo","ossssssso","obtttttbo",".ooooooo."],
+};
+// fixed (non-recolorable) sprite + palette pairs for weapons - each weapon has one look
+const WEAPON_SPRITES = {
+  sword: { grid:[".b.",".B.",".b.",".B.",".b.",".b.",".d.","ccc",".g.",".g.",".g.",".d."],
+    palette:{b:"#d9e1ea",B:"#f2f6fa",d:"#8a97a8",c:"#f5b942",g:"#7a4a30"} },
+  spear: { grid:[".t.","ttt","TTT",".t.",".w.",".w.",".W.",".w.",".w.",".W.",".w.",".w.",".W.",".w."],
+    palette:{t:"#e8eef2",T:"#ffffff",w:"#c9a86e",W:"#e0c48a"} },
+  axe: { grid:["HH...","HHh..","HHhh.",".hhh.","..g..","..g..","..G..","..g..","..g..","..o.."],
+    palette:{H:"#d3dae2",h:"#9aa7b5",g:"#8a5a44",G:"#a8735a",o:"#5a3d28"} },
+  hammer: { grid:["MMMMM","MmmmM","mmmmm","MmmmM","..g..","..g..","..G..","..g..","..g..","..o.."],
+    palette:{M:"#eef3f7",m:"#9aa7b5",g:"#8a5a44",G:"#a8735a",o:"#5a3d28"} },
+  staff: { grid:[".GG.","GggG",".gg.","..w.","..w.","..W.","..w.","..w.","..W.","..w.","..w.","..W.","..w.","..o."],
+    palette:{G:"#e6dcff",g:"#b19bff",w:"#5a3d28",W:"#7a5a3c",o:"#3a2814"} },
+  bow: { grid:["sbb.","s.bb","s..b","s..b","s.bb","s.b.","sgb.","sgb.","s.b.","s.bb","s..b","s..b","s.bb","sbb."],
+    palette:{s:"#e8eef2",b:"#8a5a44",g:"#5a3d28"} },
+  gauntlets: { grid:[".GG.","GggG","GggG",".oo."],
+    palette:{G:"#e8c96a",g:"#cfae4a",o:"#8a6a1a"} },
+};
+function playerBodyPalette(){
+  const fur = tonesFrom(COL.fur), tunic = tonesFrom(COL.tunic), boot = tonesFrom(COL.boots);
+  return {
+    d:fur.out, F:fur.hi, f:fur.base, s:fur.sh, e:COL.ink, k:COL.pink,
+    j:tunic.out, J:tunic.hi, u:tunic.base, v:tunic.sh, r:"#ffd0dc",
+    q:boot.out, Q:boot.hi, o:boot.base, w:boot.sh,
+  };
+}
+function armorPalette(hex){
+  const t = tonesFrom(hex);
+  return { o:t.out, h:t.hi, b:t.base, s:t.sh };
+}
 
 /* ---------- weapons ---------- */
 const WEAPONS = {
@@ -765,18 +882,18 @@ const BOSSES = {
 const TOTAL_FLOORS = 15;
 const BIOMES = [
   { key:"dungeon", range:[1,5],   name:"Bramblekeep",       bossKind:"boss",
-    wall:"#392c44", wallFace:"#4a3b57", wallTop:"#5a4a68",
-    floorA:"#2f2438", floorB:"#2b2134", stairsBg:"#1c1524",
+    wall:"#8a5a3a", wallFace:"#a8734a", wallTop:"#d9ab68",
+    floorA:"#dcb37c", floorB:"#cc9e6a", stairsBg:"#6b4527",
     decorTypes:["bone","crack","moss"], ambient:"torch",
     slimeHues:[COL.slime,"#7bc8d6","#e8a6d0","#c9d67b"] },
   { key:"forest", range:[6,10],   name:"Shadowfen Forest",  bossKind:"treant",
-    wall:"#2d4222", wallFace:"#38542a", wallTop:"#4a6b34",
-    floorA:"#233318", floorB:"#1f2d15", stairsBg:"#16210f",
+    wall:"#4a7a3a", wallFace:"#5c9448", wallTop:"#96d968",
+    floorA:"#82b25c", floorB:"#71a24e", stairsBg:"#3a5c28",
     decorTypes:["stump","fern","mushroom"], ambient:"firefly",
     slimeHues:["#6b8f4e","#8fae55","#4d6b37","#a3c96b"] },
   { key:"water", range:[11,15],   name:"The Sunken Shoals", bossKind:"kraken",
-    wall:"#1c3b4a", wallFace:"#25495c", wallTop:"#2f5f74",
-    floorA:"#132a35", floorB:"#0f232c", stairsBg:"#0a1a21",
+    wall:"#2a8fa8", wallFace:"#3aa8c2", wallTop:"#7fdcec",
+    floorA:"#55cfdf", floorB:"#41bacb", stairsBg:"#1c6b7a",
     decorTypes:["shell","kelp","driftwood"], ambient:"glow",
     slimeHues:["#3a7ea8","#4fa8c9","#2a5f7a","#6bc9d6"] },
 ];
@@ -818,22 +935,21 @@ function recalcMaxHp(){
 }
 function armorParts(key){
   const a = ARMOR_SETS[key] || ARMOR_SETS.traveler;
+  const helmetPal = armorPalette(a.helmet), chestPal = armorPalette(a.chest);
+  const glovePal = armorPalette(a.glove), shinPal = armorPalette(a.shin);
   return [
-    // helmet: brim + temple guards, low enough to leave the face and ears clear
-    {x:-2.3,y:10.3,w:4.6,h:1.3,c:a.helmet},
-    {x:-2.3,y:9.0,w:0.8,h:1.6,c:a.helmet},
-    {x:1.5,y:9.0,w:0.8,h:1.6,c:a.helmet},
+    // helmet: brow band, low enough to leave the face and ears clear
+    {x:-2.4,y:9.6,w:4.8,h:1.8,sprite:{grid:SPRITES.helmet,palette:helmetPal}},
     // chest plate over the tunic, with shoulder pads that swing with the arms
-    {x:-2.1,y:2.0,w:4.2,h:3.6,c:a.chest},
-    {x:-2.1,y:4.8,w:4.2,h:0.8,c:a.chestTrim},
-    {x:-3.6,y:4.6,w:1.4,h:1.4,c:a.chest, group:"armL"},
-    {x:2.2,y:4.6,w:1.4,h:1.4,c:a.chest, group:"armR"},
+    {x:-2.3,y:1.8,w:4.6,h:3.8,sprite:{grid:SPRITES.chest,palette:chestPal}},
+    {x:-3.7,y:4.4,w:1.6,h:1.2,sprite:{grid:SPRITES.shoulder,palette:chestPal}, group:"armL"},
+    {x:2.1,y:4.4,w:1.6,h:1.2,sprite:{grid:SPRITES.shoulder,palette:chestPal}, group:"armR"},
     // gloves at the paws
-    {x:-3.5,y:2.0,w:1.3,h:1.3,c:a.glove, group:"armL"},
-    {x:2.2,y:2.0,w:1.3,h:1.3,c:a.glove, group:"armR"},
+    {x:-3.6,y:1.9,w:1.4,h:1.4,sprite:{grid:SPRITES.glove,palette:glovePal}, group:"armL"},
+    {x:2.2,y:1.9,w:1.4,h:1.4,sprite:{grid:SPRITES.glove,palette:glovePal}, group:"armR"},
     // shin guards over the boots
-    {x:-2.1,y:-2.2,w:2.0,h:1.5,c:a.shin, group:"legL"},
-    {x:0.1,y:-2.2,w:2.0,h:1.5,c:a.shin, group:"legR"},
+    {x:-2.2,y:-2.3,w:2.1,h:1.7,sprite:{grid:SPRITES.shin,palette:shinPal}, group:"legL"},
+    {x:0.1,y:-2.3,w:2.1,h:1.7,sprite:{grid:SPRITES.shin,palette:shinPal}, group:"legR"},
   ];
 }
 
@@ -929,50 +1045,26 @@ function towardsWhite(hex, t){
 }
 
 function weaponParts(type){
+  const spr = (t)=>WEAPON_SPRITES[t] || WEAPON_SPRITES.sword;
   switch(type){
     case "spear":
-      return [
-        {x:2.75,y:2,w:0.6,h:9,c:"#c9a86e", group:"weapon"},
-        {x:2.55,y:10.6,w:1.0,h:2.1,c:"#e8eef2", group:"weapon"},
-      ];
+      return [{x:2.55,y:2,w:1.1,h:10.8,sprite:spr("spear"), group:"weapon"}];
     case "axe":
-      return [
-        {x:2.75,y:1.8,w:0.7,h:4.4,c:COL.boots, group:"weapon"},
-        {x:1.3,y:5.6,w:3.2,h:3,c:"#b3bcc7", group:"weapon"},
-        {x:1.3,y:5.6,w:3.2,h:0.8,c:"#8a97a8", group:"weapon"},
-      ];
+      return [{x:1.3,y:1.8,w:3.2,h:6.8,sprite:spr("axe"), group:"weapon"}];
     case "hammer":
-      return [
-        {x:2.8,y:1.8,w:0.6,h:4,c:"#8a5a44", group:"weapon"},
-        {x:1.2,y:5.4,w:4.2,h:3.2,c:"#9aa7b5", group:"weapon"},
-        {x:1.2,y:5.4,w:4.2,h:0.9,c:"#cfd8e3", group:"weapon"},
-      ];
+      return [{x:1.2,y:1.8,w:4.2,h:6.6,sprite:spr("hammer"), group:"weapon"}];
     case "staff":
-      return [
-        {x:2.75,y:2,w:0.6,h:9.4,c:"#5a3d28", group:"weapon"},
-        {x:2.35,y:10.8,w:1.4,h:1.4,c:"#b19bff", group:"weapon"},
-        {x:2.65,y:11.1,w:0.5,h:0.5,c:"#e6dcff", group:"weapon"},
-      ];
+      return [{x:2.35,y:2,w:1.4,h:9.6,sprite:spr("staff"), group:"weapon"}];
     case "bow":
-      return [
-        {x:2.3,y:1.6,w:0.6,h:2.2,c:"#8a5a44", group:"weapon"},
-        {x:2.9,y:3.6,w:0.7,h:2.8,c:"#8a5a44", group:"weapon"},
-        {x:2.3,y:6.2,w:0.6,h:2.2,c:"#8a5a44", group:"weapon"},
-        {x:2.65,y:2.0,w:0.25,h:6.2,c:"#e8eef2", group:"weapon"},
-      ];
+      return [{x:2.3,y:1.6,w:1.3,h:6.8,sprite:spr("bow"), group:"weapon"}];
     case "gauntlets":
       return [
-        {x:-3.6,y:1.9,w:1.5,h:1.5,c:"#cfae4a", group:"armL"},
-        {x:2.2,y:1.9,w:1.5,h:1.5,c:"#cfae4a", group:"armR"},
-        {x:-3.6,y:1.9,w:1.5,h:0.5,c:"#8a6a1a", group:"armL"},
-        {x:2.2,y:1.9,w:1.5,h:0.5,c:"#8a6a1a", group:"armR"},
+        {x:-3.6,y:1.9,w:1.5,h:1.5,sprite:spr("gauntlets"), group:"armL"},
+        {x:2.2,y:1.9,w:1.5,h:1.5,sprite:spr("gauntlets"), group:"armR"},
       ];
     case "sword":
     default:
-      return [
-        {x:2.6,y:2.4,w:0.9,h:4.4,c:COL.metal, group:"weapon"},
-        {x:2.6,y:6.6,w:0.9,h:0.9,c:COL.metalDark, group:"weapon"},
-      ];
+      return [{x:2.6,y:2.4,w:0.9,h:5.1,sprite:spr("sword"), group:"weapon"}];
   }
 }
 
@@ -1003,30 +1095,21 @@ function weaponSwingPose(style, p){
 }
 
 function playerParts(weaponType, armorKey){
+  const pal = playerBodyPalette();
   const parts = [
     // ears
-    {x:-2.2,y:11,w:1.6,h:4.2,c:COL.fur, group:"earL"},
-    {x:-1.9,y:12,w:0.9,h:2.2,c:COL.pink, group:"earL"},
-    {x:0.6,y:11,w:1.6,h:4.2,c:COL.fur, group:"earR"},
-    {x:0.9,y:12,w:0.9,h:2.2,c:COL.pink, group:"earR"},
+    {x:-2.5,y:11,w:2.1,h:5.0,sprite:{grid:SPRITES.ear,palette:pal}, group:"earL"},
+    {x:0.4,y:11,w:2.1,h:5.0,sprite:{grid:SPRITES.ear,palette:pal}, group:"earR"},
     // head
-    {x:-2.6,y:6.2,w:5.2,h:5.2,c:COL.fur},
-    {x:-2.6,y:6.2,w:5.2,h:1,c:COL.furShade},
-    // face
-    {x:-1.7,y:8,w:0.8,h:0.9,c:COL.ink},
-    {x:0.9,y:8,w:0.8,h:0.9,c:COL.ink},
-    {x:-2.1,y:7,w:0.8,h:0.7,c:COL.blush},
-    {x:1.3,y:7,w:0.8,h:0.7,c:COL.blush},
+    {x:-2.7,y:6.0,w:5.4,h:5.6,sprite:{grid:SPRITES.head,palette:pal}},
     // body
-    {x:-2.4,y:1.6,w:4.8,h:4.8,c:COL.tunic},
-    {x:-2.4,y:1.6,w:4.8,h:1.1,c:COL.tunicDark},
-    {x:-2.4,y:1.6,w:4.8,h:0.5,c:"#ffd0dc"},
+    {x:-2.5,y:1.4,w:5.0,h:5.2,sprite:{grid:SPRITES.torso,palette:pal}},
     // arms
-    {x:-3.4,y:2.2,w:1.1,h:3,c:COL.fur, group:"armL"},
-    {x:2.3,y:2.2,w:1.1,h:3,c:COL.fur, group:"armR"},
+    {x:-3.5,y:2.0,w:1.4,h:3.4,sprite:{grid:SPRITES.arm,palette:pal}, group:"armL"},
+    {x:2.1,y:2.0,w:1.4,h:3.4,sprite:{grid:SPRITES.arm,palette:pal}, group:"armR"},
     // legs
-    {x:-2,y:-2.2,w:1.8,h:3.8,c:COL.boots, group:"legL"},
-    {x:0.2,y:-2.2,w:1.8,h:3.8,c:COL.boots, group:"legR"},
+    {x:-2.1,y:-2.4,w:1.9,h:4.2,sprite:{grid:SPRITES.leg,palette:pal}, group:"legL"},
+    {x:0.2,y:-2.4,w:1.9,h:4.2,sprite:{grid:SPRITES.leg,palette:pal}, group:"legR"},
   ];
   parts.push(...armorParts(armorKey));
   parts.push(...weaponParts(weaponType));
@@ -1034,81 +1117,56 @@ function playerParts(weaponType, armorKey){
 }
 
 function slimeParts(hue){
-  const c1 = hue||COL.slime, c2 = hue?shade(hue,-14):COL.slimeDark;
+  const t = tonesFrom(hue||COL.slime);
+  const pal = {o:t.out, h:t.hi, b:t.base, c:COL.slimeCore, e:COL.ink, s:t.sh};
   return [
-    {x:-3.2,y:0,w:6.4,h:2,c:c2},
-    {x:-3.6,y:1.6,w:7.2,h:3.2,c:c1, group:"body"},
-    {x:-3,y:4.4,w:6,h:2.6,c:c1, group:"body"},
-    {x:-2,y:6.6,w:4,h:1.6,c:c1, group:"body"},
-    {x:-1.6,y:3.2,w:2.6,h:2,c:COL.slimeCore, group:"body"},
-    {x:-1.7,y:4.3,w:0.7,h:0.8,c:COL.ink},
-    {x:0.7,y:4.3,w:0.7,h:0.8,c:COL.ink},
+    {x:-3.6,y:0,w:7.2,h:7.2,sprite:{grid:SPRITES.slime,palette:pal}, group:"body"},
   ];
-}
-function shade(hex, amt){
-  const n = parseInt(hex.slice(1),16);
-  let r=(n>>16)+amt, g=((n>>8)&255)+amt, b=(n&255)+amt;
-  r=clamp(r,0,255); g=clamp(g,0,255); b=clamp(b,0,255);
-  return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
 }
 
 function batParts(){
+  const t = tonesFrom(COL.bat);
+  const wingPal = {o:t.out, h:t.hi, b:t.base};
+  const bodyPal = {o:t.out, b:t.base, w:"#fff", s:t.sh};
   return [
-    {x:-6,y:4,w:4.4,h:1.4,c:COL.batDark, group:"wingL"},
-    {x:-4.6,y:5,w:3.2,h:2.4,c:COL.bat, group:"wingL"},
-    {x:1.6,y:4,w:4.4,h:1.4,c:COL.batDark, group:"wingR"},
-    {x:1.4,y:5,w:3.2,h:2.4,c:COL.bat, group:"wingR"},
-    {x:-2.2,y:2.6,w:4.4,h:4,c:COL.bat},
-    {x:-2.4,y:6.2,w:1.4,h:1.2,c:COL.bat},
-    {x:1,y:6.2,w:1.4,h:1.2,c:COL.bat},
-    {x:-1.6,y:4,w:0.8,h:0.9,c:"#fff"},
-    {x:0.8,y:4,w:0.8,h:0.9,c:"#fff"},
-    {x:-1.4,y:4.1,w:0.4,h:0.5,c:COL.ink},
-    {x:1,y:4.1,w:0.4,h:0.5,c:COL.ink},
+    {x:-6,y:3.6,w:5.4,h:4.2,sprite:{grid:SPRITES.batWingL,palette:wingPal}, group:"wingL"},
+    {x:1.6,y:3.6,w:5.4,h:4.2,sprite:{grid:SPRITES.batWingR,palette:wingPal}, group:"wingR"},
+    {x:-2.4,y:2.6,w:4.8,h:4.6,sprite:{grid:SPRITES.batBody,palette:bodyPal}},
     {x:-0.9,y:3,w:0.4,h:0.6,c:"#fff", group:"fangL"},
     {x:0.5,y:3,w:0.4,h:0.6,c:"#fff", group:"fangR"},
   ];
 }
 
 function ratParts(){
+  const t = tonesFrom(COL.rat);
+  const pal = {o:t.out, b:t.base, e:COL.ink, s:t.sh};
   return [
     {x:-1,y:-0.4,w:3.2,h:0.7,c:COL.tail, group:"tail"},
-    {x:-3.4,y:1,w:6.8,h:3.2,c:COL.rat},
-    {x:-3.4,y:1,w:6.8,h:0.8,c:COL.ratDark},
-    {x:-3.8,y:2.6,w:2.6,h:2.6,c:COL.rat},
-    {x:-3.4,y:4.4,w:1,h:1.4,c:COL.ratDark, group:"earL"},
-    {x:-1.9,y:4.6,w:0.9,h:1.2,c:COL.ratDark, group:"earR"},
-    {x:-3.1,y:3.2,w:0.6,h:0.7,c:COL.ink},
-    {x:-4.2,y:2.4,w:1,h:0.6,c:"#ffd7e0"},
+    {x:-3.6,y:1,w:7.2,h:4,sprite:{grid:SPRITES.ratBody,palette:pal}},
     {x:2.6,y:1.4,w:1.4,h:1.2,c:COL.ratDark, group:"legR"},
     {x:-3.2,y:1.4,w:1.4,h:1.2,c:COL.ratDark, group:"legL"},
   ];
 }
 
 function ghostParts(){
+  const t = tonesFrom(COL.ghost);
+  const pal = {o:t.out, h:t.hi, b:t.base, s:t.sh, e:COL.ghostDark, m:COL.ghostDark};
+  const wavePal = {o:t.out, h:t.hi, b:t.base, s:t.sh};
   const p=[
-    {x:-3.6,y:3,w:7.2,h:6,c:COL.ghost},
-    {x:-3.6,y:6.6,w:7.2,h:2.4,c:"#f2ecff"},
-    {x:-2,y:5.6,w:1,h:1.1,c:COL.ink},
-    {x:1,y:5.6,w:1,h:1.1,c:COL.ink},
-    {x:-1.3,y:4.3,w:2.6,h:0.6,c:COL.ghostDark},
+    {x:-3.8,y:2.6,w:7.6,h:6.6,sprite:{grid:SPRITES.ghostBody,palette:pal}},
   ];
   for(let i=0;i<4;i++){
-    p.push({x:-3.6+i*1.8, y:0.4, w:1.8, h:2.8, c: i%2? COL.ghost: "#dccdf7", group:"wave"+i});
+    p.push({x:-3.6+i*1.8, y:0.4, w:1.8, h:2.8, sprite:{grid:SPRITES.ghostWave,palette:wavePal}, group:"wave"+i});
   }
   return p;
 }
 
 function bossParts(kind){
   const b = BOSSES[kind] || BOSSES.boss;
+  const t = tonesFrom(b.bodyColor);
+  const pal = {o:t.out, h:t.hi, b:t.base, s:t.sh, e:COL.ink, m:COL.ink};
   const parts = [
-    {x:-6,y:0,w:12,h:3,c:b.bodyDark},
-    {x:-6.8,y:2.6,w:13.6,h:5,c:b.bodyColor, group:"body"},
-    {x:-5.6,y:6.6,w:11.2,h:4,c:b.bodyColor, group:"body"},
-    {x:-3.6,y:9.6,w:7.2,h:2.6,c:b.bodyColor, group:"body"},
-    {x:-2.6,y:6,w:5.2,h:3.6,c:b.faceColor, group:"body"},
-    {x:-2.6,y:7.4,w:1.2,h:1.4,c:COL.ink},
-    {x:1.4,y:7.4,w:1.2,h:1.4,c:COL.ink},
+    {x:-6.8,y:0,w:13.6,h:11,sprite:{grid:SPRITES.bossBody,palette:pal}, group:"body"},
   ];
   if(b.topper==="crown"){
     parts.push({x:-3.2,y:12,w:1.6,h:1.8,c:COL.crown});
@@ -1126,13 +1184,11 @@ function bossParts(kind){
   return parts;
 }
 
+const MERCHANT_ROBE_PAL = {o:"#3a2b20", h:"#9a7a5a", b:"#7a5a3e", s:"#5a3d28", t:"#d8a94a"};
 function merchantParts(){
   return [
     // robe (widens toward the ground)
-    {x:-2.6,y:0,w:5.2,h:3,c:"#6b4a34"},
-    {x:-3.2,y:3,w:6.4,h:3.6,c:"#7a5a3e", group:"robe"},
-    {x:-3.8,y:6.6,w:7.6,h:2.6,c:"#8a6a4a", group:"robe"},
-    {x:-3.8,y:6.6,w:7.6,h:0.8,c:"#d8a94a", group:"robe"},
+    {x:-3.8,y:0,w:7.6,h:9.2,sprite:{grid:SPRITES.merchantRobe,palette:MERCHANT_ROBE_PAL}, group:"robe"},
     // hood + face
     {x:-2.2,y:9.2,w:4.4,h:3.4,c:"#5a3d28"},
     {x:-1.6,y:9.6,w:3.2,h:2.4,c:"#e8c9a0"},
@@ -2567,7 +2623,7 @@ function updateParticles(dt){
 
 /* ---------- render ---------- */
 function render(){
-  ctx.fillStyle = "#120a1a";
+  ctx.fillStyle = "#2e1f16";
   ctx.fillRect(0,0,VIEWW,VIEWH);
 
   ctx.save();
@@ -2607,10 +2663,10 @@ function render(){
 }
 
 function renderTitleScene(){
-  ctx.fillStyle="#241732";
+  ctx.fillStyle="#c99a5c";
   ctx.fillRect(0,0,VIEWW,VIEWH);
   for(let y=0;y<VIEWH;y+=TILE) for(let x=0;x<VIEWW;x+=TILE){
-    ctx.fillStyle = ((x/TILE+y/TILE)%2===0) ? "#2b1c3c" : "#271a37";
+    ctx.fillStyle = ((x/TILE+y/TILE)%2===0) ? "#dcb37c" : "#cc9e6a";
     ctx.fillRect(x,y,TILE,TILE);
   }
   updateParticles(0);
@@ -2797,9 +2853,9 @@ function renderDmgNums(){
   ctx.globalAlpha=1;
 }
 function renderVignette(){
-  const g = ctx.createRadialGradient(VIEWW/2,VIEWH/2,VIEWH*0.35,VIEWW/2,VIEWH/2,VIEWH*0.75);
-  g.addColorStop(0,"rgba(0,0,0,0)");
-  g.addColorStop(1,"rgba(0,0,0,0.45)");
+  const g = ctx.createRadialGradient(VIEWW/2,VIEWH/2,VIEWH*0.4,VIEWW/2,VIEWH/2,VIEWH*0.8);
+  g.addColorStop(0,"rgba(46,31,22,0)");
+  g.addColorStop(1,"rgba(46,31,22,0.28)");
   ctx.fillStyle=g;
   ctx.fillRect(0,0,VIEWW,VIEWH);
 }
