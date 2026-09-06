@@ -79,8 +79,7 @@
   .is-touch .viewport-frame{ flex:1 1 auto; min-height:0; border-radius:0; }
   .is-touch canvas#game{ width:100%; height:100%; aspect-ratio:auto; }
   .is-touch .hud, .is-touch .loadout, .is-touch .quest-tracker,
-  .is-touch .xplabel, .is-touch .xpbar-wrap, .is-touch .below,
-  .is-touch .touch-controls-bar{ flex:none; }
+  .is-touch .xplabel, .is-touch .xpbar-wrap, .is-touch .below{ flex:none; }
   /* the HUD (hearts/floor/gold/loadout/quest tracker/xp) moves above the game view on
      mobile - out of the thumb zone at the bottom and always visible - while the canvas and
      the bottom controls keep their place. Flex "order" does this without touching DOM
@@ -88,7 +87,6 @@
      (order 0 by default), so they land above it; everything else stays in source order. */
   .is-touch .hud, .is-touch .loadout, .is-touch .quest-tracker,
   .is-touch .xplabel, .is-touch .xpbar-wrap{ order:-1; }
-  .is-touch .touch-controls-bar{ padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px)); }
 
   .titlebar{
     display:flex;
@@ -130,22 +128,17 @@
     touch-action:none;
   }
 
-  /* Touch controls live in their own row below the whole HUD stack - not floating on top of
-     the game view - so they never obscure the dungeon. Each half is a big "zone" rather than
-     a small fixed widget: the joystick and dash button appear wherever the player's thumb
-     actually lands within their zone (see moveZone/dashZone in the script), so there's no
-     need to find a tiny fixed target - just touch down anywhere on your side. Sizes here are
-     the 100%-scale base; settings-controlled resizing (see applyTouchScale) multiplies these
-     via inline style, so the CSS values below are just the starting point. */
+  /* Touch controls overlay the game view itself instead of sitting in a reserved strip below
+     it, so the whole screen stays game and nothing sits there empty when idle: the left half
+     is one big "move" zone and the right half one big "dash" zone, each fully transparent
+     until the player actually touches down inside, at which point the joystick/dash button
+     appears centered right under that thumb (see moveZone/dashZone in the script) instead of
+     living at one small fixed spot. Sizes here are the 100%-scale base; settings-controlled
+     resizing (see applyTouchScale) multiplies these via inline style, so the CSS values below
+     are just the starting point. */
   .touch-controls-bar{
+    position:absolute; inset:0;
     display:flex;
-    align-items:stretch;
-    justify-content:space-between;
-    gap:16px;
-    padding:10px 18px;
-    height:150px;
-    border-top:2px solid rgba(58,43,63,.1);
-    margin-top:2px;
   }
   .touch-controls-bar[hidden]{ display:none; }
   .touch-zone{
@@ -165,8 +158,9 @@
     position:relative;
     width:100%; height:100%;
     border-radius:50%;
-    background:rgba(58,43,63,.08);
-    border:2px solid rgba(58,43,63,.22);
+    background:rgba(246,236,217,.16);
+    border:2px solid rgba(246,236,217,.45);
+    backdrop-filter:blur(1px);
   }
   .joyknob{
     position:absolute;
@@ -174,9 +168,9 @@
     width:42px; height:42px;
     margin:-21px 0 0 -21px;
     border-radius:50%;
-    background:rgba(255,111,145,.92);
-    border:2px solid #fff;
-    box-shadow:0 2px 6px rgba(0,0,0,.25);
+    background:rgba(255,111,145,.9);
+    border:2px solid rgba(255,255,255,.7);
+    box-shadow:0 2px 6px rgba(0,0,0,.35);
     transition:background .1s ease;
   }
 
@@ -189,9 +183,9 @@
     --cd:0;
     background:
       conic-gradient(rgba(20,14,10,.68) calc(var(--cd)*360deg), transparent calc(var(--cd)*360deg)),
-      rgba(245,185,66,.9);
-    border:2px solid #fff;
-    box-shadow:0 2px 6px rgba(0,0,0,.25);
+      rgba(245,185,66,.88);
+    border:2px solid rgba(255,255,255,.7);
+    box-shadow:0 2px 6px rgba(0,0,0,.35);
     color:var(--ink);
     font-family:"Silkscreen",monospace;
     font-size:11px;
@@ -786,6 +780,21 @@
   <div class="viewport-frame">
     <canvas id="game" width="640" height="416"></canvas>
 
+    <!-- Touch controls overlay the game view itself - the whole left half is a "move" zone,
+         the whole right half a "dash" zone, invisible until the player actually touches down
+         inside, at which point the joystick/dash button appears centered right under that
+         thumb instead of living at one small fixed spot. See moveZone/dashZone in the script. -->
+    <div class="touch-controls-bar" id="touchControlsBar" hidden>
+      <div class="touch-zone" id="moveZone">
+        <div class="joystick" id="joystick" hidden>
+          <div class="joybase"><div class="joyknob" id="joyknob"></div></div>
+        </div>
+      </div>
+      <div class="touch-zone" id="dashZone">
+        <button type="button" class="dashbtn" id="dashBtn" hidden data-i18n>DASH</button>
+      </div>
+    </div>
+
     <div class="overlay" id="ov-title">
       <div class="lang-row" id="langRow">
         <button type="button" class="lang-btn selected" data-lang="en">EN</button>
@@ -961,20 +970,6 @@
       <button id="settingsBtn" title="Settings" aria-label="Settings" data-i18n-title data-i18n-aria>⚙</button>
       <button id="mute" title="Toggle sound" aria-label="Toggle sound" data-i18n-title data-i18n-aria>🔊</button>
     </span>
-  </div>
-  <!-- Touch controls sit below the whole HUD stack (not floating on the game view) so they
-       never cover the dungeon and stay in one predictable spot. Each half is a big tap/drag
-       zone: the joystick and dash button appear right where the thumb actually lands within
-       its zone instead of at one small fixed spot - see moveZone/dashZone in the script. -->
-  <div class="touch-controls-bar" id="touchControlsBar" hidden>
-    <div class="touch-zone" id="moveZone">
-      <div class="joystick" id="joystick" hidden>
-        <div class="joybase"><div class="joyknob" id="joyknob"></div></div>
-      </div>
-    </div>
-    <div class="touch-zone" id="dashZone">
-      <button type="button" class="dashbtn" id="dashBtn" hidden data-i18n>DASH</button>
-    </div>
   </div>
   <pre id="debugbox"></pre>
 </div>
