@@ -1449,6 +1449,23 @@ function carveH(x0,x1,y){ const a=Math.min(x0,x1),b=Math.max(x0,x1); for(let x=a
 function carveV(y0,y1,x){ const a=Math.min(y0,y1),b=Math.max(y0,y1); for(let y=a;y<=b;y++) map[y][x]=FLOOR; }
 function tileAt(px,py){ const tx=Math.floor(px/TILE), ty=Math.floor(py/TILE); if(tx<0||ty<0||tx>=MAPW||ty>=MAPH) return WALL; return map[ty][tx]; }
 function solidAt(px,py){ return tileAt(px,py)===WALL; }
+// scans outward tile-by-tile for the nearest open floor and returns its center in pixels;
+// used to rescue anything (a dropped item, the player) that would otherwise end up embedded in a wall
+function nearestFloorPixel(px,py){
+  if(!solidAt(px,py)) return {x:px,y:py};
+  const tx0 = Math.floor(px/TILE), ty0 = Math.floor(py/TILE);
+  for(let radius=1; radius<=8; radius++){
+    for(let dy=-radius; dy<=radius; dy++){
+      for(let dx=-radius; dx<=radius; dx++){
+        const tx=tx0+dx, ty=ty0+dy;
+        if(tx>=0 && ty>=0 && tx<MAPW && ty<MAPH && map[ty][tx]!==WALL){
+          return {x:(tx+0.5)*TILE, y:(ty+0.5)*TILE};
+        }
+      }
+    }
+  }
+  return {x:px,y:py};
+}
 
 /* ---------- spawning ---------- */
 function spawnFloor(){
@@ -1565,7 +1582,7 @@ function makeEnemy(type,x,y,bossKind){
 function newPlayer(classId){
   const cls = CLASSES[classId] || null;
   const p = {
-    x:0,y:0,facing:1,radius:11,speed:150,
+    x:0,y:0,facing:1,radius:11,speed:172,
     baseMaxHp:BASE_MAX_HP,weapon:(cls&&cls.weapon)||"sword",armor:"traveler",
     classId: classId||null,
     animT:0,moving:false,hurtTimer:0,invuln:0,
@@ -2212,19 +2229,10 @@ function update(dt){
     player.x = (sc.x+0.5)*TILE; player.y = (sc.y+0.5)*TILE;
   } else if(solidAt(player.x,player.y)){
     // safety net: if the player is ever embedded in a wall (e.g. an old save,
-    // or a knockback that predates the moveWithCollision fix), pop them back out
-    // by scanning outward for the nearest open tile instead of leaving them stuck.
-    outer: for(let radius=1; radius<=6; radius++){
-      for(let dyy=-radius; dyy<=radius; dyy++){
-        for(let dxx=-radius; dxx<=radius; dxx++){
-          const tx = Math.floor(player.x/TILE)+dxx, ty = Math.floor(player.y/TILE)+dyy;
-          if(tx>=0 && ty>=0 && tx<MAPW && ty<MAPH && map[ty][tx]!==WALL){
-            player.x = (tx+0.5)*TILE; player.y = (ty+0.5)*TILE;
-            break outer;
-          }
-        }
-      }
-    }
+    // or a knockback that predates the moveWithCollision fix), pop them back
+    // out to the nearest open tile instead of leaving them stuck.
+    const safe = nearestFloorPixel(player.x, player.y);
+    player.x = safe.x; player.y = safe.y;
   }
 
   // passive regeneration (from cards and/or worn armor)
@@ -2367,10 +2375,12 @@ function hitEnemy(en, dmg, angle, knockback){
     }
     if(Math.random()<0.4 || en.type==="boss"){
       const amt = en.type==="boss"? 20 : randi(1,3);
-      items.push({type:"gold", x:en.x, y:en.y, amount:amt, t:0});
+      const gp = nearestFloorPixel(en.x, en.y);
+      items.push({type:"gold", x:gp.x, y:gp.y, amount:amt, t:0});
     }
     const gemValue = en.type==="boss" ? 15 : en.type==="ghost" ? 2 : 1;
-    items.push({type:"gem", x:en.x+rand(-6,6), y:en.y+rand(-6,6), value:gemValue, t:0});
+    const gemP = nearestFloorPixel(en.x+rand(-6,6), en.y+rand(-6,6));
+    items.push({type:"gem", x:gemP.x, y:gemP.y, value:gemValue, t:0});
   }
 }
 
@@ -2544,6 +2554,8 @@ function nextFloor(){
 }
 
 function updateParticles(dt){
+  if(!Array.isArray(particles)) particles = [];
+  if(!Array.isArray(dmgNums)) dmgNums = [];
   for(const p of particles){
     p.life+=dt; p.vy += (p.grav||0)*dt;
     p.x += p.vx*dt; p.y += p.vy*dt;
@@ -2762,6 +2774,7 @@ function drawWeaponIcon(ctx, type){
   }
 }
 function renderParticles(){
+  if(!Array.isArray(particles)) return;
   for(const p of particles){
     ctx.globalAlpha = clamp(1-p.life/p.maxLife,0,1);
     ctx.fillStyle = p.color;
