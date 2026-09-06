@@ -1,0 +1,2538 @@
+<title>Bramblekeep</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Baloo+2:wght@500;600;700;800&display=swap">
+<style>
+  :root{
+    --void:#1b1025;
+    --void-deep:#120a1a;
+    --stone:#4a3b57;
+    --stone-dark:#392c44;
+    --floor:#2f2438;
+    --parchment:#f6ecd9;
+    --parchment-dark:#e8dbc2;
+    --ink:#3a2b3f;
+    --ink-soft:#6b5a70;
+    --coral:#ff6f91;
+    --coral-dark:#e2536f;
+    --moss:#8fd694;
+    --amber:#f5b942;
+    --lavender:#b9a6d9;
+  }
+  *{box-sizing:border-box;}
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse 900px 500px at 50% -10%, #2a1938 0%, transparent 60%),
+      var(--void);
+    color:var(--ink);
+    font-family:"Baloo 2", ui-rounded, "Segoe UI", sans-serif;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    padding:28px 14px 40px;
+    min-height:100vh;
+    overscroll-behavior:contain;
+  }
+  @media (max-width:480px){
+    body{ padding:14px 8px 24px; }
+  }
+  #dust{position:fixed; inset:0; pointer-events:none; z-index:0;}
+
+  .cabinet{
+    position:relative;
+    z-index:1;
+    width:min(680px, 100%);
+    background:linear-gradient(180deg, var(--parchment) 0%, var(--parchment-dark) 100%);
+    border-radius:22px;
+    padding:14px 14px 16px;
+    box-shadow:
+      0 0 0 3px #d8c39f,
+      0 18px 0 -6px rgba(0,0,0,.35),
+      0 30px 50px -18px rgba(0,0,0,.65);
+    border:3px solid #c9a86e;
+  }
+
+  .titlebar{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    padding:2px 6px 10px;
+  }
+  .logo{
+    font-family:"Silkscreen", monospace;
+    font-weight:700;
+    font-size:22px;
+    color:var(--coral-dark);
+    letter-spacing:1px;
+    text-shadow:2px 2px 0 #fff, 3px 3px 0 rgba(58,43,63,.25);
+  }
+  .tagline{
+    font-size:12px;
+    color:var(--ink-soft);
+    font-weight:600;
+    display:none;
+  }
+  @media (min-width:480px){ .tagline{display:inline;} }
+
+  .viewport-frame{
+    position:relative;
+    border-radius:12px;
+    overflow:hidden;
+    box-shadow:
+      inset 0 0 0 4px var(--stone-dark),
+      inset 0 0 0 8px #1a1220,
+      0 2px 6px rgba(0,0,0,.4) inset;
+    background:var(--void-deep);
+  }
+  canvas#game{
+    display:block;
+    width:100%;
+    height:auto;
+    aspect-ratio:640/416;
+    touch-action:none;
+  }
+
+  .joystick{
+    position:absolute;
+    left:14px; bottom:14px;
+    width:104px; height:104px;
+    touch-action:none;
+    -webkit-user-select:none; user-select:none;
+    z-index:5;
+  }
+  .joystick[hidden]{ display:none; }
+  .joybase{
+    position:relative;
+    width:100%; height:100%;
+    border-radius:50%;
+    background:rgba(246,236,217,.14);
+    border:2px solid rgba(246,236,217,.4);
+    backdrop-filter:blur(1px);
+  }
+  .joyknob{
+    position:absolute;
+    left:50%; top:50%;
+    width:42px; height:42px;
+    margin:-21px 0 0 -21px;
+    border-radius:50%;
+    background:rgba(255,111,145,.88);
+    border:2px solid rgba(255,255,255,.65);
+    box-shadow:0 2px 6px rgba(0,0,0,.35);
+    transition:background .1s ease;
+  }
+
+  .overlay{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center;
+    padding:18px;
+    gap:10px;
+    background:rgba(18,10,26,.72);
+    backdrop-filter:blur(1px);
+    color:var(--parchment);
+    transition:opacity .35s ease;
+    overflow-y:auto;
+  }
+  .overlay[hidden]{display:none;}
+  .overlay h1{
+    font-family:"Silkscreen", monospace;
+    font-size:clamp(20px,5.2vw,30px);
+    margin:0;
+    color:var(--coral);
+    text-shadow:3px 3px 0 var(--void-deep);
+    text-wrap:balance;
+  }
+  .overlay p{
+    margin:0;
+    font-size:14px;
+    color:var(--lavender);
+    max-width:34ch;
+    line-height:1.5;
+  }
+  .stat-row{
+    display:flex; gap:18px; margin:2px 0 4px;
+    font-family:"Silkscreen", monospace;
+    font-size:13px;
+  }
+  .stat-row div{display:flex; flex-direction:column; align-items:center; gap:4px;}
+  .stat-row span.label{font-family:"Baloo 2",sans-serif; font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--lavender); font-weight:700;}
+  .stat-row span.value{color:var(--amber); font-variant-numeric:tabular-nums;}
+
+  button.playbtn{
+    font-family:"Baloo 2", sans-serif;
+    font-weight:800;
+    font-size:15px;
+    color:var(--ink);
+    background:var(--coral);
+    border:none;
+    border-radius:999px;
+    padding:11px 26px;
+    cursor:pointer;
+    box-shadow:0 4px 0 var(--coral-dark), 0 6px 10px rgba(0,0,0,.35);
+    transition:transform .08s ease, box-shadow .08s ease;
+  }
+  button.playbtn:hover{ filter:brightness(1.05); }
+  button.playbtn:active{ transform:translateY(3px); box-shadow:0 1px 0 var(--coral-dark), 0 2px 6px rgba(0,0,0,.3); }
+  button.playbtn:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
+  .hint{font-size:11px; color:var(--lavender); opacity:.85;}
+
+  .howto-list{
+    display:flex; flex-direction:column; gap:12px;
+    width:100%; max-width:340px;
+    margin:2px 0;
+  }
+  .howto-row{
+    display:flex; align-items:center; gap:12px;
+    text-align:left;
+    background:rgba(246,236,217,.08);
+    border:1px solid rgba(246,236,217,.18);
+    border-radius:12px;
+    padding:8px 12px;
+  }
+  .howto-icon{
+    flex:none;
+    width:46px; height:46px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .howto-row p{
+    max-width:none;
+    font-size:12.5px;
+    color:var(--parchment);
+    line-height:1.35;
+  }
+  .howto-row .sub{ display:block; font-size:10.5px; color:var(--lavender); margin-top:1px; }
+
+  .keycluster{ display:grid; grid-template-columns:repeat(3,15px); grid-template-rows:repeat(2,15px); gap:2px; }
+  .keycluster kbd{ padding:0; display:flex; align-items:center; justify-content:center; font-size:8px; }
+  .keycluster .k-w{ grid-column:2; grid-row:1; }
+  .keycluster .k-a{ grid-column:1; grid-row:2; }
+  .keycluster .k-s{ grid-column:2; grid-row:2; }
+  .keycluster .k-d{ grid-column:3; grid-row:2; }
+
+  .mini-joy{ width:34px; height:34px; border-radius:50%; background:rgba(246,236,217,.2); border:2px solid rgba(246,236,217,.4); position:relative; }
+  .mini-joy::after{ content:""; position:absolute; width:16px; height:16px; border-radius:50%; background:var(--coral); left:50%; top:50%; margin:-8px 0 0 -8px; }
+
+  .bump-icon{ display:flex; align-items:center; gap:2px; }
+  .bump-icon .bunny{ width:16px; height:16px; border-radius:4px; background:var(--coral); }
+  .bump-icon .bolt{ font-family:"Silkscreen",monospace; font-size:13px; color:var(--amber); }
+  .bump-icon .foe{ width:14px; height:14px; border-radius:50%; background:#7bd68a; }
+
+  .stairs-icon{ width:26px; height:26px; border-radius:4px; background:#1c1524; display:flex; align-items:center; justify-content:center; }
+  .stairs-icon i{ width:14px; height:14px; background:var(--amber); border-radius:2px; }
+
+  .shop-list{
+    display:flex; flex-direction:column; gap:10px;
+    width:100%; max-width:320px; margin:2px 0;
+  }
+  .shop-row{
+    display:flex; align-items:center; gap:12px;
+    background:rgba(246,236,217,.08);
+    border:1px solid rgba(246,236,217,.18);
+    border-radius:12px;
+    padding:8px 10px;
+  }
+  .shop-icon{ flex:none; width:36px; height:36px; position:relative; display:flex; align-items:center; justify-content:center; }
+  .shop-info{ flex:1; text-align:left; min-width:0; }
+  .shop-name{ font-size:12.5px; font-weight:700; color:var(--parchment); }
+  .shop-price{ font-family:"Silkscreen",monospace; font-size:11px; color:var(--amber); margin-top:2px; }
+  .shop-buy{
+    font-family:"Baloo 2",sans-serif; font-weight:800; font-size:12px;
+    background:var(--coral); color:var(--ink); border:none; border-radius:999px;
+    padding:7px 15px; cursor:pointer; flex:none;
+    box-shadow:0 3px 0 var(--coral-dark);
+  }
+  .shop-buy:active:not(:disabled){ transform:translateY(2px); box-shadow:0 1px 0 var(--coral-dark); }
+  .shop-buy:disabled{ background:#8a7a68; color:#e2d8c6; box-shadow:none; cursor:default; opacity:.75; }
+
+  .shop-icon-spear{ width:6px; height:28px; background:#c9a86e; border-radius:2px; }
+  .shop-icon-spear::after{ content:""; position:absolute; top:2px; left:-2px; width:10px; height:8px; background:#e8eef2; border-radius:2px; }
+  .shop-icon-axe{ width:5px; height:26px; background:#8a5a44; border-radius:2px; }
+  .shop-icon-axe::after{ content:""; position:absolute; top:2px; left:-8px; width:16px; height:12px; background:#b3bcc7; border-radius:3px; }
+  .shop-icon-hammer{ width:5px; height:22px; background:#8a5a44; border-radius:2px; }
+  .shop-icon-hammer::after{ content:""; position:absolute; top:-2px; left:-9px; width:18px; height:12px; background:#9aa7b5; border-radius:3px; }
+  .shop-icon-potion{ width:16px; height:18px; background:var(--moss); border-radius:3px 3px 7px 7px; margin-top:4px; }
+  .shop-icon-potion::before{ content:""; position:absolute; top:-2px; left:11px; width:6px; height:5px; background:#5a4a68; border-radius:1px; }
+  .shop-icon-heal{ width:22px; height:22px; background:var(--coral); border-radius:50%; }
+  .shop-icon-heal::after{ content:"+"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:15px; }
+  .shop-icon-armor{ width:22px; height:24px; clip-path:polygon(50% 0%, 100% 16%, 100% 55%, 50% 100%, 0% 55%, 0% 16%); background:var(--parchment-dark); }
+
+  .card-list{
+    display:flex; gap:10px; flex-wrap:wrap; justify-content:center;
+    width:100%; max-width:420px; margin:4px 0;
+  }
+  .card{
+    flex:1 1 112px; max-width:132px;
+    background:rgba(246,236,217,.08);
+    border:1px solid rgba(246,236,217,.2);
+    border-radius:14px;
+    padding:12px 10px;
+    cursor:pointer;
+    display:flex; flex-direction:column; gap:6px;
+    transition:transform .08s ease, background .15s ease;
+  }
+  .card:hover{ background:rgba(246,236,217,.16); transform:translateY(-2px); }
+  .card:active{ transform:translateY(0); }
+  .card-badge{
+    align-self:flex-start;
+    font-family:"Silkscreen",monospace; font-size:8px; letter-spacing:.05em;
+    padding:2px 6px; border-radius:5px;
+  }
+  .card-weapon .card-badge{ background:rgba(255,111,145,.25); color:var(--coral); }
+  .card-magic .card-badge{ background:rgba(185,166,217,.3); color:var(--lavender); }
+  .card-name{ font-size:12.5px; font-weight:800; color:var(--parchment); }
+  .card-desc{ font-size:11px; color:var(--lavender); line-height:1.35; }
+
+  .secondarybtn{
+    font-family:"Baloo 2",sans-serif; font-weight:700; font-size:12px;
+    background:transparent; color:var(--lavender);
+    border:1px solid rgba(246,236,217,.35);
+    border-radius:999px; padding:7px 16px; cursor:pointer; margin-top:2px;
+  }
+  .secondarybtn:hover:not(:disabled){ background:rgba(246,236,217,.1); }
+  .secondarybtn:disabled{ opacity:.5; cursor:default; }
+
+  .shards-line{
+    font-family:"Silkscreen",monospace; font-size:12px; color:var(--amber);
+    display:flex; align-items:center; gap:4px; margin:-2px 0 2px;
+  }
+
+  .skilltree-scroll{
+    width:100%; max-width:420px;
+    max-height:200px; overflow-y:auto;
+    display:flex; flex-direction:column; gap:10px;
+    margin:4px 0; padding-right:4px;
+  }
+  .tree-section{ display:flex; flex-direction:column; gap:6px; text-align:left; }
+  .tree-title{
+    font-family:"Silkscreen",monospace; font-size:11px; letter-spacing:.05em;
+    text-transform:uppercase; padding-left:2px;
+  }
+  .tree-node{
+    display:flex; align-items:center; gap:10px;
+    background:rgba(246,236,217,.08);
+    border:1px solid rgba(246,236,217,.16);
+    border-radius:10px; padding:7px 10px;
+  }
+  .tree-node-info{ flex:1; min-width:0; }
+  .tree-node-name{ font-size:12px; font-weight:700; color:var(--parchment); }
+  .tree-node-lvl{ font-family:"Silkscreen",monospace; font-size:9px; color:var(--lavender); }
+  .tree-node-desc{ font-size:10.5px; color:var(--lavender); line-height:1.3; margin-top:1px; }
+  .tree-buy{
+    font-family:"Silkscreen",monospace; font-weight:700; font-size:11px;
+    background:var(--amber); color:var(--ink); border:none; border-radius:8px;
+    padding:6px 10px; cursor:pointer; flex:none;
+    box-shadow:0 2px 0 #c9860f;
+  }
+  .tree-buy:disabled{ background:#8a7a68; color:#e2d8c6; box-shadow:none; cursor:default; opacity:.75; }
+  .tree-buy:active:not(:disabled){ transform:translateY(2px); box-shadow:none; }
+
+  .xpbar-wrap{
+    position:relative;
+    margin:0 10px;
+    height:7px;
+    background:rgba(0,0,0,.14);
+    border-radius:5px;
+    overflow:hidden;
+  }
+  .xpbar-fill{
+    height:100%; width:0%;
+    background:linear-gradient(90deg, #8fd6ff, #b19bff);
+    transition:width .3s ease;
+  }
+  .xplabel{
+    font-family:"Silkscreen",monospace; font-size:9px; color:var(--ink-soft);
+    padding:0 10px; display:block; margin-top:2px;
+  }
+
+  .hud{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:9px 10px 3px;
+  }
+  .hearts{display:flex; gap:3px;}
+  .floorlabel{
+    font-family:"Silkscreen", monospace;
+    font-size:12px;
+    color:var(--ink);
+    background:rgba(0,0,0,.08);
+    padding:5px 10px;
+    border-radius:8px;
+    white-space:nowrap;
+  }
+  .floorlabel b{color:var(--coral-dark);}
+  .loadout{
+    display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:wrap;
+    font-family:"Silkscreen", monospace; font-size:9.5px; color:var(--ink-soft);
+    padding:3px 10px 0;
+  }
+  .loadoutsep{ opacity:.5; }
+  .goldwrap{
+    display:flex; align-items:center; gap:6px;
+    font-family:"Silkscreen", monospace;
+    font-size:13px;
+    color:var(--ink);
+  }
+  .coin{
+    width:14px; height:14px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #ffe9a8, var(--amber) 60%, #c9860f 100%);
+    box-shadow:0 1px 0 rgba(0,0,0,.25) inset;
+    flex:none;
+  }
+  #goldval{font-variant-numeric:tabular-nums; color:var(--ink);}
+
+  .below{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:2px 10px 0;
+    min-height:22px;
+  }
+  #toast{
+    font-size:12.5px; font-weight:600; color:var(--ink-soft);
+    opacity:0; transition:opacity .25s ease;
+  }
+  #toast.show{opacity:1;}
+  .controls{
+    font-size:11px; color:var(--ink-soft); font-weight:600;
+    display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;
+  }
+  kbd{
+    font-family:"Silkscreen", monospace;
+    background:var(--parchment-dark);
+    border:1px solid #c9a86e;
+    border-bottom-width:2px;
+    border-radius:4px;
+    padding:1px 5px;
+    font-size:10px;
+    color:var(--ink);
+  }
+  #mute, #help{
+    background:none; border:none; cursor:pointer; font-size:15px;
+    color:var(--ink-soft); padding:6px; line-height:1;
+    min-width:32px; min-height:32px;
+    display:inline-flex; align-items:center; justify-content:center;
+    border-radius:8px;
+  }
+  #mute:hover, #help:hover{ color:var(--ink); background:rgba(0,0,0,.06); }
+  #help{ font-family:"Silkscreen", monospace; font-weight:700; font-size:12px; }
+
+  #debugbox{
+    display:none;
+    margin-top:8px;
+    padding:8px 10px;
+    background:#2a1030;
+    color:#ffb5c7;
+    font-family:"Silkscreen", monospace;
+    font-size:10px;
+    line-height:1.5;
+    border-radius:8px;
+    white-space:pre-wrap;
+    word-break:break-word;
+    max-height:140px;
+    overflow:auto;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .overlay, button.playbtn{ transition:none; }
+  }
+  @media (pointer:coarse){
+    .kbd-hint{ display:none; }
+  }
+</style>
+
+<canvas id="dust"></canvas>
+
+<div class="cabinet">
+  <div class="titlebar">
+    <span class="logo">BRAMBLEKEEP</span>
+    <span class="tagline">a cozy little dungeon crawl</span>
+  </div>
+
+  <div class="viewport-frame">
+    <canvas id="game" width="640" height="416"></canvas>
+
+    <div class="overlay" id="ov-title">
+      <h1>Bramblekeep</h1>
+      <p>A small bunny knight, a very large dungeon. Get close to fight, find better weapons, find the stairs. Try not to get eaten.</p>
+      <div class="stat-row" id="bestRow" hidden>
+        <div><span class="label">Best floor</span><span class="value" id="bestFloor">1</span></div>
+        <div><span class="label">Best gold</span><span class="value" id="bestGold">0</span></div>
+      </div>
+      <div class="shards-line">◆ <span id="titleShards">0</span> Shards</div>
+      <button class="playbtn" id="btnResumeRun" hidden>Continue Run &mdash; Floor <span id="resumeFloor">1</span></button>
+      <button class="playbtn" id="btnStart">Start Adventure</button>
+      <button class="secondarybtn" id="btnUpgradesTitle">Skill Trees</button>
+      <p class="hint">Move: WASD / Arrows &nbsp;·&nbsp; Bump enemies to attack</p>
+    </div>
+
+    <div class="overlay" id="ov-howto" hidden>
+      <h1>How to Play</h1>
+      <div class="howto-list">
+        <div class="howto-row">
+          <div class="howto-icon">
+            <div class="keycluster">
+              <kbd class="k-w">W</kbd><kbd class="k-a">A</kbd><kbd class="k-s">S</kbd><kbd class="k-d">D</kbd>
+            </div>
+          </div>
+          <p>Move with <b>WASD</b> or arrow keys<span class="sub">or drag the joystick on touch screens</span></p>
+        </div>
+        <div class="howto-row">
+          <div class="howto-icon"><div class="mini-joy"></div></div>
+          <p>On mobile, <b>drag anywhere</b> in the joystick circle to move<span class="sub">it appears bottom-left once you start</span></p>
+        </div>
+        <div class="howto-row">
+          <div class="howto-icon bump-icon"><span class="bunny"></span><span class="bolt">⚔</span><span class="foe"></span></div>
+          <p>Get close and you <b>attack automatically</b><span class="sub">no attack button - range and arc depend on your weapon</span></p>
+        </div>
+        <div class="howto-row">
+          <div class="howto-icon"><div class="stairs-icon"><i></i></div></div>
+          <p>Find the <b>glowing stairs</b> to descend<span class="sub">15 floors across 3 realms - stone, forest &amp; tide - each ending in a boss</span></p>
+        </div>
+        <div class="howto-row">
+          <div class="howto-icon"><span class="coin" style="width:22px;height:22px;"></span></div>
+          <p>A <b>merchant</b> sets up near the stairs twice per realm<span class="sub">bump into them to browse weapons, armor, and potions for gold</span></p>
+        </div>
+        <div class="howto-row">
+          <div class="howto-icon"><div class="shop-icon-armor" style="background:var(--coral);"></div></div>
+          <p>Find or buy <b>armor sets</b> - helmet, chest, gloves &amp; shins<span class="sub">each set is a full look with its own passive bonus</span></p>
+        </div>
+      </div>
+      <button class="playbtn" id="btnHowtoGo"><span id="howtoGoLabel">Let's Go!</span></button>
+    </div>
+
+    <div class="overlay" id="ov-shop" hidden>
+      <h1>Wandering Merchant</h1>
+      <p>&ldquo;Ahh, a customer! Gold for goods, friend?&rdquo;</p>
+      <div class="shop-list" id="shopList"></div>
+      <button class="playbtn" id="btnShopLeave">Leave</button>
+    </div>
+
+    <div class="overlay" id="ov-levelup" hidden>
+      <h1>Level <span id="levelupLevel">2</span>!</h1>
+      <p>Choose one upgrade.</p>
+      <div class="card-list" id="cardList"></div>
+      <button class="secondarybtn" id="btnReroll">Reroll</button>
+    </div>
+
+    <div class="overlay" id="ov-dead" hidden>
+      <h1>Nom nom nom&hellip;</h1>
+      <p>You were a very good bunny knight. The dungeon disagrees.</p>
+      <div class="stat-row">
+        <div><span class="label">Floor reached</span><span class="value" id="deadFloor">1</span></div>
+        <div><span class="label">Gold collected</span><span class="value" id="deadGold">0</span></div>
+        <div><span class="label">Shards banked</span><span class="value" id="deadShards">0</span></div>
+      </div>
+      <button class="playbtn" id="btnRetry">Try Again</button>
+      <button class="secondarybtn" id="btnUpgradesDead">Skill Trees</button>
+    </div>
+
+    <div class="overlay" id="ov-win" hidden>
+      <h1>Bramblekeep Conquered!</h1>
+      <p>From bramble stone to forest root to the deep tide, every realm bows to one very small, very determined bunny.</p>
+      <div class="stat-row">
+        <div><span class="label">Floors cleared</span><span class="value" id="winFloor">15</span></div>
+        <div><span class="label">Gold collected</span><span class="value" id="winGold">0</span></div>
+        <div><span class="label">Shards banked</span><span class="value" id="winShards">0</span></div>
+      </div>
+      <button class="playbtn" id="btnAgain">Play Again</button>
+      <button class="secondarybtn" id="btnUpgradesWin">Skill Trees</button>
+    </div>
+
+    <div class="overlay" id="ov-bossclear" hidden>
+      <h1 id="bossClearTitle">Boss Defeated!</h1>
+      <p>Push on to the next realm, or bank your gold as shards and return to Bramblekeep.</p>
+      <div class="stat-row">
+        <div><span class="label">Gold this run</span><span class="value" id="bcGold">0</span></div>
+        <div><span class="label">Shards if banked</span><span class="value" id="bcShards">0</span></div>
+      </div>
+      <button class="playbtn" id="btnContinueRun">Continue Deeper</button>
+      <button class="secondarybtn" id="btnBankQuit">Bank Shards &amp; Return</button>
+    </div>
+
+    <div class="overlay" id="ov-upgrades" hidden>
+      <h1>Skill Trees</h1>
+      <div class="shards-line">◆ <span id="shardsVal">0</span> Shards</div>
+      <div class="skilltree-scroll" id="skillTrees"></div>
+      <button class="playbtn" id="btnUpgradesClose">Back</button>
+    </div>
+
+    <div class="joystick" id="joystick" hidden>
+      <div class="joybase"><div class="joyknob" id="joyknob"></div></div>
+    </div>
+  </div>
+
+  <div class="hud">
+    <div class="hearts"><canvas id="heartsCanvas" width="180" height="18"></canvas></div>
+    <div class="floorlabel">FLOOR <b id="floorNum">1</b>/15</div>
+    <div class="goldwrap"><span class="coin"></span><span id="goldval">0</span></div>
+  </div>
+  <div class="loadout"><span id="weaponName">Sword</span><span class="loadoutsep">·</span><span id="armorName">Traveler's Garb</span></div>
+  <span class="xplabel">Lv.<span id="levelVal">1</span></span>
+  <div class="xpbar-wrap"><div class="xpbar-fill" id="xpFill"></div></div>
+  <div class="below">
+    <span id="toast"></span>
+    <span class="controls">
+      <span class="kbd-hint"><kbd>WASD</kbd> move</span>
+      <button id="help" title="How to play" aria-label="How to play">?</button>
+      <button id="mute" title="Toggle sound" aria-label="Toggle sound">🔊</button>
+    </span>
+  </div>
+  <pre id="debugbox"></pre>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- utility ---------- */
+const rand = (a,b)=>a+Math.random()*(b-a);
+const randi = (a,b)=>Math.floor(rand(a,b+1));
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp = (a,b,t)=>a+(b-a)*t;
+const choice = arr=>arr[Math.floor(Math.random()*arr.length)];
+const dist2 = (ax,ay,bx,by)=>{const dx=ax-bx,dy=ay-by; return dx*dx+dy*dy;};
+
+/* ---------- audio (tiny synth, no assets) ---------- */
+const Audio1 = (()=>{
+  let ctx=null, muted=false;
+  function ensure(){ if(!ctx){ try{ ctx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return ctx; }
+  function tone(freq, dur, type, gain, glideTo){
+    if(muted) return;
+    const c = ensure(); if(!c) return;
+    const t0 = c.currentTime;
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    osc.type = type||"square";
+    osc.frequency.setValueAtTime(freq, t0);
+    if(glideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20,glideTo), t0+dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain||0.16, t0+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    osc.connect(g); g.connect(c.destination);
+    osc.start(t0); osc.stop(t0+dur+0.02);
+  }
+  return {
+    hit: ()=>tone(220,0.09,"square",0.14,140),
+    hurt: ()=>tone(140,0.16,"sawtooth",0.15,70),
+    death: ()=>{tone(300,0.12,"square",0.13,90); setTimeout(()=>tone(180,0.18,"square",0.1,60),70);},
+    pickup: ()=>{tone(520,0.07,"triangle",0.13,780); setTimeout(()=>tone(780,0.08,"triangle",0.12),60);},
+    gold: ()=>tone(900,0.06,"triangle",0.1,1200),
+    xp: ()=>tone(660,0.05,"sine",0.09,880),
+    levelup: ()=>{[440,554,660,880,1108].forEach((f,i)=>setTimeout(()=>tone(f,0.14,"triangle",0.14),i*60));},
+    stairs: ()=>{tone(440,0.1,"triangle",0.12,660); setTimeout(()=>tone(660,0.1,"triangle",0.12,880),90); setTimeout(()=>tone(880,0.16,"triangle",0.12,1320),180);},
+    upgrade: ()=>{[440,554,660,880].forEach((f,i)=>setTimeout(()=>tone(f,0.12,"triangle",0.13),i*70));},
+    dead: ()=>{[300,260,220,160].forEach((f,i)=>setTimeout(()=>tone(f,0.22,"sawtooth",0.12),i*140));},
+    win: ()=>{[523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,0.2,"triangle",0.14),i*130));},
+    boss: ()=>{tone(90,0.4,"sawtooth",0.16,60);},
+    setMuted(m){ muted=m; },
+    unlock(){ ensure(); if(ctx && ctx.state==="suspended") ctx.resume(); }
+  };
+})();
+
+/* ---------- pixel-part drawing engine ---------- */
+// Every creature is a list of rects: {x,y,w,h,c,group}
+// x,y,w,h are in "units" (1 unit = U px), anchored at bottom-center = (0,0), y grows upward (negative).
+const U = 3.6;
+
+function drawParts(ctx, parts, ox, oy, opts){
+  opts = opts || {};
+  const flip = opts.flip ? -1 : 1;
+  const groupOffset = opts.groupOffset || {};
+  const globalSx = opts.sx!=null?opts.sx:1;
+  const globalSy = opts.sy!=null?opts.sy:1;
+  const alpha = opts.alpha!=null?opts.alpha:1;
+  const flashWhite = opts.flash || 0;
+  // shared pivot (roughly the hand) that any rotating group swings around
+  const pivotX = 2.7*U, pivotY = -2.2*U;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(ox, oy);
+  ctx.scale(flip*globalSx, globalSy);
+  ctx.rotate(opts.rotate||0);
+
+  for(const p of parts){
+    const off = p.group && groupOffset[p.group] ? groupOffset[p.group] : null;
+    const x = (p.x + (off && off.dx||0)) * U;
+    const y = (p.y + (off && off.dy||0)) * U;
+    const w = p.w * U, h = p.h * U;
+    const rot = (off && off.rot) || 0;
+    ctx.fillStyle = flashWhite>0 ? towardsWhite(p.c, flashWhite) : p.c;
+    // draw with y growing up -> canvas y is -y-h
+    if(rot){
+      ctx.save();
+      ctx.translate(pivotX, pivotY);
+      ctx.rotate(rot);
+      ctx.translate(-pivotX, -pivotY);
+      fillSoftRect(ctx, x, -y-h, Math.max(1,w), Math.max(1,h));
+      ctx.restore();
+    } else {
+      fillSoftRect(ctx, x, -y-h, Math.max(1,w), Math.max(1,h));
+    }
+  }
+  ctx.restore();
+}
+
+/* ---------- creature templates ---------- */
+const COL = {
+  fur:"#f7ede2", furShade:"#e7d6c4", pink:"#ffb5c7", ink:"#2a1e30",
+  blush:"#ffc9d6", tunic:"#ff6f91", tunicDark:"#e2536f", boots:"#8a5a44",
+  metal:"#d9e1ea", metalDark:"#9aa7b5",
+  slime:"#7bd68a", slimeDark:"#57b26a", slimeCore:"#e9fff0",
+  bat:"#8a6bb0", batDark:"#5f4783", fang:"#fff",
+  rat:"#b58a63", ratDark:"#8a6748", tail:"#c79b74",
+  ghost:"#e7defb", ghostDark:"#c9b8ee",
+  boss:"#a558c9", bossDark:"#7a3c9c", crown:"#f5b942"
+};
+
+/* ---------- weapons ---------- */
+const WEAPONS = {
+  sword:  { name:"Bramble Sword", short:"Sword",  dmg:2, range:34, arc:1.9, duration:0.18, cooldown:0.34, moveSlow:0.55, knockback:10, style:"slash" },
+  spear:  { name:"Long Spear",    short:"Spear",  dmg:2, range:58, arc:0.5, duration:0.24, cooldown:0.42, moveSlow:0.75, knockback:14, style:"thrust", price:5 },
+  axe:    { name:"Bramble Axe",   short:"Axe",    dmg:3, range:32, arc:2.7, duration:0.32, cooldown:0.56, moveSlow:0.35, knockback:16, style:"chop", price:8 },
+  hammer: { name:"War Hammer",    short:"Hammer", dmg:5, range:28, arc:3.6, duration:0.44, cooldown:0.78, moveSlow:0.18, knockback:26, style:"slam", stun:0.4, price:12 },
+};
+
+/* ---------- bosses ---------- */
+const BOSSES = {
+  boss:   { name:"The Bramble King",      hp:34, dmg:3, speed:48, radius:22, contactCd:0.6,  bodyColor:"#a558c9", bodyDark:"#7a3c9c", faceColor:"#e7cdfa", topper:"crown" },
+  treant: { name:"The Elder Bramblewood", hp:46, dmg:4, speed:44, radius:24, contactCd:0.6,  bodyColor:"#6b8f4e", bodyDark:"#4d6b37", faceColor:"#e2edc9", topper:"leaves" },
+  kraken: { name:"The Abyssal Tide",      hp:60, dmg:5, speed:42, radius:26, contactCd:0.55, bodyColor:"#3a7ea8", bodyDark:"#285870", faceColor:"#cdeffa", topper:"fins" },
+};
+
+/* ---------- biomes ---------- */
+const TOTAL_FLOORS = 15;
+const BIOMES = [
+  { key:"dungeon", range:[1,5],   name:"Bramblekeep",       bossKind:"boss",
+    wall:"#392c44", wallFace:"#4a3b57", wallTop:"#5a4a68",
+    floorA:"#2f2438", floorB:"#2b2134", stairsBg:"#1c1524",
+    decorTypes:["bone","crack","moss"], ambient:"torch",
+    slimeHues:[COL.slime,"#7bc8d6","#e8a6d0","#c9d67b"] },
+  { key:"forest", range:[6,10],   name:"Shadowfen Forest",  bossKind:"treant",
+    wall:"#2d4222", wallFace:"#38542a", wallTop:"#4a6b34",
+    floorA:"#233318", floorB:"#1f2d15", stairsBg:"#16210f",
+    decorTypes:["stump","fern","mushroom"], ambient:"firefly",
+    slimeHues:["#6b8f4e","#8fae55","#4d6b37","#a3c96b"] },
+  { key:"water", range:[11,15],   name:"The Sunken Shoals", bossKind:"kraken",
+    wall:"#1c3b4a", wallFace:"#25495c", wallTop:"#2f5f74",
+    floorA:"#132a35", floorB:"#0f232c", stairsBg:"#0a1a21",
+    decorTypes:["shell","kelp","driftwood"], ambient:"glow",
+    slimeHues:["#3a7ea8","#4fa8c9","#2a5f7a","#6bc9d6"] },
+];
+function getBiome(floor){
+  for(const b of BIOMES){ if(floor>=b.range[0] && floor<=b.range[1]) return b; }
+  return BIOMES[BIOMES.length-1];
+}
+
+/* ---------- armor sets ----------
+   Each set is worn as a whole (helmet+chest+gloves+shins together) and grants one
+   passive bonus while equipped - swap sets any time by finding or buying a new one. */
+const BASE_MAX_HP = 5;
+const ARMOR_SETS = {
+  traveler:  { name:"Traveler's Garb",    short:"Traveler",
+    desc:"A dependable start. 5 max HP.",
+    helmet:"#c9a06a", chest:"#8a6a4a", chestTrim:"#6b4a34", glove:"#a67c52", shin:"#6b4a34",
+    maxHpBonus:0 },
+  shadowfen: { name:"Shadowfen Leathers", short:"Shadowfen",
+    desc:"+20% move speed. 6 max HP.",
+    helmet:"#5c8443", chest:"#3f5c2c", chestTrim:"#2d4222", glove:"#5c8443", shin:"#2d4222",
+    moveSpeedMult:1.2, maxHpBonus:1 },
+  tidewoven: { name:"Tidewoven Scale",    short:"Tidewoven",
+    desc:"Regenerate 1 HP every 6 seconds. 7 max HP.",
+    helmet:"#3f7f96", chest:"#25495c", chestTrim:"#1c3b4a", glove:"#3f7f96", shin:"#1c3b4a",
+    regenRate:1/6, maxHpBonus:2 },
+  kingsbane: { name:"Kingsbane Regalia",  short:"Kingsbane",
+    desc:"+15% weapon damage. 8 max HP.",
+    helmet:"#f5b942", chest:"#a558c9", chestTrim:"#7a3c9c", glove:"#f5b942", shin:"#7a3c9c",
+    dmgMult:1.15, maxHpBonus:3 },
+  bramble:   { name:"Bramble Plate",      short:"Bramble Plate",
+    desc:"Take 20% less contact damage. 10 max HP.",
+    helmet:"#6b5a78", chest:"#4a3b57", chestTrim:"#392c44", glove:"#6b5a78", shin:"#392c44",
+    dmgReduction:0.2, maxHpBonus:5 },
+};
+function getArmor(){ return ARMOR_SETS[player.armor] || ARMOR_SETS.traveler; }
+function recalcMaxHp(){
+  player.maxhp = player.baseMaxHp + (getArmor().maxHpBonus||0);
+  player.hp = Math.min(player.hp, player.maxhp);
+}
+function armorParts(key){
+  const a = ARMOR_SETS[key] || ARMOR_SETS.traveler;
+  return [
+    // helmet: brim + temple guards, low enough to leave the face and ears clear
+    {x:-2.3,y:10.3,w:4.6,h:1.3,c:a.helmet},
+    {x:-2.3,y:9.0,w:0.8,h:1.6,c:a.helmet},
+    {x:1.5,y:9.0,w:0.8,h:1.6,c:a.helmet},
+    // chest plate over the tunic, with shoulder pads that swing with the arms
+    {x:-2.1,y:2.0,w:4.2,h:3.6,c:a.chest},
+    {x:-2.1,y:4.8,w:4.2,h:0.8,c:a.chestTrim},
+    {x:-3.6,y:4.6,w:1.4,h:1.4,c:a.chest, group:"armL"},
+    {x:2.2,y:4.6,w:1.4,h:1.4,c:a.chest, group:"armR"},
+    // gloves at the paws
+    {x:-3.5,y:2.0,w:1.3,h:1.3,c:a.glove, group:"armL"},
+    {x:2.2,y:2.0,w:1.3,h:1.3,c:a.glove, group:"armR"},
+    // shin guards over the boots
+    {x:-2.1,y:-2.2,w:2.0,h:1.5,c:a.shin, group:"legL"},
+    {x:0.1,y:-2.2,w:2.0,h:1.5,c:a.shin, group:"legR"},
+  ];
+}
+
+/* ---------- level-up ability cards ---------- */
+const CARDS = [
+  {id:"sharp",     type:"weapon", name:"Sharpened Edge", desc:"+1 damage with your weapon",      apply:p=>{ p.mods.dmgAdd+=1; }},
+  {id:"quick",     type:"weapon", name:"Quick Hands",    desc:"15% faster attacks",               apply:p=>{ p.mods.cdMult*=0.85; }},
+  {id:"reach",     type:"weapon", name:"Long Reach",     desc:"+20% weapon range",                apply:p=>{ p.mods.rangeMult*=1.2; }},
+  {id:"wide",      type:"weapon", name:"Wide Swing",     desc:"+15% swing arc",                   apply:p=>{ p.mods.arcMult*=1.15; }},
+  {id:"heavy",     type:"weapon", name:"Heavy Blow",     desc:"+30% knockback",                   apply:p=>{ p.mods.knockbackMult*=1.3; }},
+  {id:"momentum",  type:"weapon", name:"Battle Stride",  desc:"Move 25% faster while attacking",  apply:p=>{ p.mods.swingMoveMult*=1.25; }},
+  {id:"twinfangs", type:"weapon", name:"Twin Fangs",     desc:"15% chance to strike twice",       apply:p=>{ p.mods.doubleHitChance+=0.15; }},
+  {id:"vitality",  type:"magic",  name:"Vitality",       desc:"+2 max HP, fully restored",        apply:p=>{ p.baseMaxHp+=2; recalcMaxHp(); p.hp=p.maxhp; }},
+  {id:"swift",     type:"magic",  name:"Swift Boots",    desc:"+12% move speed",                  apply:p=>{ p.mods.moveSpeedMult*=1.12; }},
+  {id:"magnet",    type:"magic",  name:"Magnet Charm",   desc:"+40% pickup radius",               apply:p=>{ p.pickupRadius*=1.4; }},
+  {id:"vamp",      type:"magic",  name:"Vampiric Fang",  desc:"10% chance to heal 1 HP on hit",   apply:p=>{ p.mods.vampChance+=0.1; }},
+  {id:"regen",     type:"magic",  name:"Regeneration",   desc:"Slowly regenerate HP over time",   apply:p=>{ p.mods.regenRate+=0.15; }},
+  {id:"thorns",    type:"magic",  name:"Thorns",         desc:"Reflect 1 damage to attackers",    apply:p=>{ p.mods.thorns+=1; }},
+  {id:"secondwind",type:"magic",  name:"Second Wind",    desc:"Survive one fatal blow at 1 HP",   apply:p=>{ p.mods.secondWindCharges+=1; }},
+  {id:"lucky",     type:"magic",  name:"Lucky Charm",    desc:"+20% gold from all sources",       apply:p=>{ p.mods.goldMult*=1.2; }},
+  {id:"ward",      type:"magic",  name:"Bramble Ward",   desc:"Take 15% less contact damage",     apply:p=>{ p.mods.dmgReduction=Math.min(0.6,p.mods.dmgReduction+0.15); }},
+];
+function drawCards(n){
+  const pool = CARDS.slice();
+  for(let i=pool.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [pool[i],pool[j]] = [pool[j],pool[i]];
+  }
+  return pool.slice(0,n);
+}
+
+function fillSoftRect(ctx, x, y, w, h){
+  const r = Math.min(2.2, w/2, h/2);
+  if(r>0.3 && typeof ctx.roundRect==="function"){
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    ctx.fill();
+  } else {
+    ctx.fillRect(x, y, w, h);
+  }
+}
+function towardsWhite(hex, t){
+  if(!hex || hex[0]!=="#") return hex;
+  const n = parseInt(hex.slice(1),16);
+  let r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  r=Math.round(r+(255-r)*t); g=Math.round(g+(255-g)*t); b=Math.round(b+(255-b)*t);
+  return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+
+function weaponParts(type){
+  switch(type){
+    case "spear":
+      return [
+        {x:2.75,y:2,w:0.6,h:9,c:"#c9a86e", group:"weapon"},
+        {x:2.55,y:10.6,w:1.0,h:2.1,c:"#e8eef2", group:"weapon"},
+      ];
+    case "axe":
+      return [
+        {x:2.75,y:1.8,w:0.7,h:4.4,c:COL.boots, group:"weapon"},
+        {x:1.3,y:5.6,w:3.2,h:3,c:"#b3bcc7", group:"weapon"},
+        {x:1.3,y:5.6,w:3.2,h:0.8,c:"#8a97a8", group:"weapon"},
+      ];
+    case "hammer":
+      return [
+        {x:2.8,y:1.8,w:0.6,h:4,c:"#8a5a44", group:"weapon"},
+        {x:1.2,y:5.4,w:4.2,h:3.2,c:"#9aa7b5", group:"weapon"},
+        {x:1.2,y:5.4,w:4.2,h:0.9,c:"#cfd8e3", group:"weapon"},
+      ];
+    case "sword":
+    default:
+      return [
+        {x:2.6,y:2.4,w:0.9,h:4.4,c:COL.metal, group:"weapon"},
+        {x:2.6,y:6.6,w:0.9,h:0.9,c:COL.metalDark, group:"weapon"},
+      ];
+  }
+}
+
+function weaponSwingPose(style, p){
+  const bell = Math.sin(clamp(p,0,1)*Math.PI);
+  switch(style){
+    case "thrust": // spear: straight poke, no rotation
+      return { dx: bell*6, dy:0, rot:0, squash:bell };
+    case "chop": // axe: wide diagonal sweep
+      return { dx: bell*1.2, dy:0, rot: -1.1+p*2.3, squash:bell*0.9 };
+    case "slam": // hammer: overhead to forward-down
+      return { dx: bell*0.6, dy:-bell*1.2, rot: -2.4+p*3.1, squash:bell*1.5 };
+    case "slash": // sword: quick arc
+    default:
+      return { dx: bell*2.2, dy:0, rot: -1.0+p*1.8, squash:bell*0.8 };
+  }
+}
+
+function playerParts(weaponType, armorKey){
+  const parts = [
+    // ears
+    {x:-2.2,y:11,w:1.6,h:4.2,c:COL.fur, group:"earL"},
+    {x:-1.9,y:12,w:0.9,h:2.2,c:COL.pink, group:"earL"},
+    {x:0.6,y:11,w:1.6,h:4.2,c:COL.fur, group:"earR"},
+    {x:0.9,y:12,w:0.9,h:2.2,c:COL.pink, group:"earR"},
+    // head
+    {x:-2.6,y:6.2,w:5.2,h:5.2,c:COL.fur},
+    {x:-2.6,y:6.2,w:5.2,h:1,c:COL.furShade},
+    // face
+    {x:-1.7,y:8,w:0.8,h:0.9,c:COL.ink},
+    {x:0.9,y:8,w:0.8,h:0.9,c:COL.ink},
+    {x:-2.1,y:7,w:0.8,h:0.7,c:COL.blush},
+    {x:1.3,y:7,w:0.8,h:0.7,c:COL.blush},
+    // body
+    {x:-2.4,y:1.6,w:4.8,h:4.8,c:COL.tunic},
+    {x:-2.4,y:1.6,w:4.8,h:1.1,c:COL.tunicDark},
+    {x:-2.4,y:1.6,w:4.8,h:0.5,c:"#ffd0dc"},
+    // arms
+    {x:-3.4,y:2.2,w:1.1,h:3,c:COL.fur, group:"armL"},
+    {x:2.3,y:2.2,w:1.1,h:3,c:COL.fur, group:"armR"},
+    // legs
+    {x:-2,y:-2.2,w:1.8,h:3.8,c:COL.boots, group:"legL"},
+    {x:0.2,y:-2.2,w:1.8,h:3.8,c:COL.boots, group:"legR"},
+  ];
+  parts.push(...armorParts(armorKey));
+  parts.push(...weaponParts(weaponType));
+  return parts;
+}
+
+function slimeParts(hue){
+  const c1 = hue||COL.slime, c2 = hue?shade(hue,-14):COL.slimeDark;
+  return [
+    {x:-3.2,y:0,w:6.4,h:2,c:c2},
+    {x:-3.6,y:1.6,w:7.2,h:3.2,c:c1, group:"body"},
+    {x:-3,y:4.4,w:6,h:2.6,c:c1, group:"body"},
+    {x:-2,y:6.6,w:4,h:1.6,c:c1, group:"body"},
+    {x:-1.6,y:3.2,w:2.6,h:2,c:COL.slimeCore, group:"body"},
+    {x:-1.7,y:4.3,w:0.7,h:0.8,c:COL.ink},
+    {x:0.7,y:4.3,w:0.7,h:0.8,c:COL.ink},
+  ];
+}
+function shade(hex, amt){
+  const n = parseInt(hex.slice(1),16);
+  let r=(n>>16)+amt, g=((n>>8)&255)+amt, b=(n&255)+amt;
+  r=clamp(r,0,255); g=clamp(g,0,255); b=clamp(b,0,255);
+  return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+
+function batParts(){
+  return [
+    {x:-6,y:4,w:4.4,h:1.4,c:COL.batDark, group:"wingL"},
+    {x:-4.6,y:5,w:3.2,h:2.4,c:COL.bat, group:"wingL"},
+    {x:1.6,y:4,w:4.4,h:1.4,c:COL.batDark, group:"wingR"},
+    {x:1.4,y:5,w:3.2,h:2.4,c:COL.bat, group:"wingR"},
+    {x:-2.2,y:2.6,w:4.4,h:4,c:COL.bat},
+    {x:-2.4,y:6.2,w:1.4,h:1.2,c:COL.bat},
+    {x:1,y:6.2,w:1.4,h:1.2,c:COL.bat},
+    {x:-1.6,y:4,w:0.8,h:0.9,c:"#fff"},
+    {x:0.8,y:4,w:0.8,h:0.9,c:"#fff"},
+    {x:-1.4,y:4.1,w:0.4,h:0.5,c:COL.ink},
+    {x:1,y:4.1,w:0.4,h:0.5,c:COL.ink},
+    {x:-0.9,y:3,w:0.4,h:0.6,c:"#fff", group:"fangL"},
+    {x:0.5,y:3,w:0.4,h:0.6,c:"#fff", group:"fangR"},
+  ];
+}
+
+function ratParts(){
+  return [
+    {x:-1,y:-0.4,w:3.2,h:0.7,c:COL.tail, group:"tail"},
+    {x:-3.4,y:1,w:6.8,h:3.2,c:COL.rat},
+    {x:-3.4,y:1,w:6.8,h:0.8,c:COL.ratDark},
+    {x:-3.8,y:2.6,w:2.6,h:2.6,c:COL.rat},
+    {x:-3.4,y:4.4,w:1,h:1.4,c:COL.ratDark, group:"earL"},
+    {x:-1.9,y:4.6,w:0.9,h:1.2,c:COL.ratDark, group:"earR"},
+    {x:-3.1,y:3.2,w:0.6,h:0.7,c:COL.ink},
+    {x:-4.2,y:2.4,w:1,h:0.6,c:"#ffd7e0"},
+    {x:2.6,y:1.4,w:1.4,h:1.2,c:COL.ratDark, group:"legR"},
+    {x:-3.2,y:1.4,w:1.4,h:1.2,c:COL.ratDark, group:"legL"},
+  ];
+}
+
+function ghostParts(){
+  const p=[
+    {x:-3.6,y:3,w:7.2,h:6,c:COL.ghost},
+    {x:-3.6,y:6.6,w:7.2,h:2.4,c:"#f2ecff"},
+    {x:-2,y:5.6,w:1,h:1.1,c:COL.ink},
+    {x:1,y:5.6,w:1,h:1.1,c:COL.ink},
+    {x:-1.3,y:4.3,w:2.6,h:0.6,c:COL.ghostDark},
+  ];
+  for(let i=0;i<4;i++){
+    p.push({x:-3.6+i*1.8, y:0.4, w:1.8, h:2.8, c: i%2? COL.ghost: "#dccdf7", group:"wave"+i});
+  }
+  return p;
+}
+
+function bossParts(kind){
+  const b = BOSSES[kind] || BOSSES.boss;
+  const parts = [
+    {x:-6,y:0,w:12,h:3,c:b.bodyDark},
+    {x:-6.8,y:2.6,w:13.6,h:5,c:b.bodyColor, group:"body"},
+    {x:-5.6,y:6.6,w:11.2,h:4,c:b.bodyColor, group:"body"},
+    {x:-3.6,y:9.6,w:7.2,h:2.6,c:b.bodyColor, group:"body"},
+    {x:-2.6,y:6,w:5.2,h:3.6,c:b.faceColor, group:"body"},
+    {x:-2.6,y:7.4,w:1.2,h:1.4,c:COL.ink},
+    {x:1.4,y:7.4,w:1.2,h:1.4,c:COL.ink},
+  ];
+  if(b.topper==="crown"){
+    parts.push({x:-3.2,y:12,w:1.6,h:1.8,c:COL.crown});
+    parts.push({x:-0.8,y:12.6,w:1.6,h:2.4,c:COL.crown});
+    parts.push({x:1.6,y:12,w:1.6,h:1.8,c:COL.crown});
+  } else if(b.topper==="leaves"){
+    parts.push({x:-3.6,y:11.4,w:2.6,h:2.6,c:"#4d6b37"});
+    parts.push({x:-1,y:12.4,w:2.8,h:3,c:"#7fae55"});
+    parts.push({x:1.4,y:11.6,w:2.4,h:2.4,c:"#4d6b37"});
+  } else if(b.topper==="fins"){
+    parts.push({x:-3.4,y:11.6,w:1.6,h:2.8,c:"#2a5f7a", group:"finL"});
+    parts.push({x:-0.8,y:12.6,w:1.6,h:3.2,c:"#4fa8c9", group:"finM"});
+    parts.push({x:1.6,y:11.6,w:1.6,h:2.8,c:"#2a5f7a", group:"finR"});
+  }
+  return parts;
+}
+
+function merchantParts(){
+  return [
+    // robe (widens toward the ground)
+    {x:-2.6,y:0,w:5.2,h:3,c:"#6b4a34"},
+    {x:-3.2,y:3,w:6.4,h:3.6,c:"#7a5a3e", group:"robe"},
+    {x:-3.8,y:6.6,w:7.6,h:2.6,c:"#8a6a4a", group:"robe"},
+    {x:-3.8,y:6.6,w:7.6,h:0.8,c:"#d8a94a", group:"robe"},
+    // hood + face
+    {x:-2.2,y:9.2,w:4.4,h:3.4,c:"#5a3d28"},
+    {x:-1.6,y:9.6,w:3.2,h:2.4,c:"#e8c9a0"},
+    {x:-1.1,y:10.3,w:0.7,h:0.8,c:COL.ink},
+    {x:0.5,y:10.3,w:0.7,h:0.8,c:COL.ink},
+    {x:-0.6,y:9.7,w:1.2,h:0.6,c:"#c9a06a"},
+    {x:-1,y:12.4,w:2,h:1.6,c:"#5a3d28", group:"hood"},
+    // lantern-holding arm
+    {x:2.3,y:1.6,w:1,h:2.6,c:"#3a2b20", group:"armR"},
+    {x:2,y:0,w:1.6,h:1.8,c:"#f5b942", group:"lantern"},
+    {x:2.3,y:1.8,w:1,h:0.4,c:"#3a2b20", group:"lantern"},
+  ];
+}
+
+/* ---------- generic animated draw ---------- */
+function drawCreature(ctx, kind, ent, camx, camy){
+  const t = ent.animT||0;
+  const sx = ent.x - camx, sy = ent.y - camy;
+  const moving = ent.moving;
+  const walkPhase = t * (moving? 10 : 3.2);
+  const idleBob = Math.sin(t*3.2)*0.35;
+  const walkBob = moving ? Math.abs(Math.sin(walkPhase))*0.9 : 0;
+  let bob = idleBob*(moving?0.3:1) + walkBob;
+  let squashX = 1, squashY = 1;
+  const groupOffset = {};
+  let extraScaleY = 1;
+
+  if(ent.hurtTimer>0){ bob += Math.sin(ent.hurtTimer*60)*0.4; }
+
+  if(kind==="player"){
+    const wpn = getEffectiveWeapon();
+    const legSwing = moving? Math.sin(walkPhase)*1.6 : 0;
+    groupOffset.legL = {dy: Math.max(0,legSwing)};
+    groupOffset.legR = {dy: Math.max(0,-legSwing)};
+    groupOffset.earL = {dx: Math.sin(t*3+0.4)*0.25};
+    groupOffset.earR = {dx: Math.sin(t*3+1.2)*0.25};
+    groupOffset.armL = {dy: moving? Math.max(0,-legSwing)*0.6:0};
+    groupOffset.armR = {dy: moving? Math.max(0,legSwing)*0.6:0};
+
+    if(ent.attackTimer>0){
+      const p = 1 - clamp(ent.attackTimer/wpn.duration, 0, 1);
+      const pose = weaponSwingPose(wpn.style, p);
+      groupOffset.armR = {dx:pose.dx*0.5, dy:pose.dy*0.5};
+      groupOffset.weapon = {dx:pose.dx, dy:pose.dy, rot:pose.rot};
+      squashX = 1+pose.squash*0.14; squashY = 1-pose.squash*0.1;
+    } else {
+      groupOffset.weapon = {rot:0};
+    }
+
+    squashX *= 1+idleBob*0.02; squashY *= 1-idleBob*0.02;
+    drawParts(ctx, playerParts(ent.weapon, ent.armor), sx, sy - bob*0.3, {
+      flip: ent.facing<0, groupOffset, sx:squashX, sy:squashY,
+      flash: ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)) : 0,
+      alpha: ent.dying? Math.max(0,1-ent.dieT/0.5) : 1,
+      rotate: ent.dying? Math.min(1,ent.dieT/0.5)*(ent.facing<0?-1:1)*1.3 : 0,
+    });
+  } else if(kind==="slime"){
+    const sq = 1+Math.sin(walkPhase)*0.16;
+    squashX*=sq; squashY*=1/Math.max(0.7,sq);
+    groupOffset.body = {dy: Math.abs(Math.sin(walkPhase))*0.5};
+    drawParts(ctx, slimeParts(ent.hue), sx, sy - Math.abs(Math.sin(walkPhase))*1.6, {
+      flip: ent.facing<0, groupOffset, sx:squashX, sy:squashY,
+      flash: ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)):0,
+      alpha: ent.dying? Math.max(0,1-ent.dieT/0.4):1,
+    });
+  } else if(kind==="bat"){
+    const flap = Math.sin(t*22);
+    groupOffset.wingL = {dy: flap*1.4};
+    groupOffset.wingR = {dy: -flap*1.4};
+    drawParts(ctx, batParts(), sx, sy + Math.sin(t*6)*1.6, {
+      flip: ent.facing<0, groupOffset,
+      flash: ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)):0,
+      alpha: ent.dying? Math.max(0,1-ent.dieT/0.4):1,
+    });
+  } else if(kind==="rat"){
+    groupOffset.tail = {dy: Math.sin(walkPhase*1.3)*0.6};
+    groupOffset.legL = {dy: moving? Math.max(0,Math.sin(walkPhase))*0.9:0};
+    groupOffset.legR = {dy: moving? Math.max(0,-Math.sin(walkPhase))*0.9:0};
+    drawParts(ctx, ratParts(), sx, sy - bob*0.15, {
+      flip: ent.facing<0, groupOffset,
+      flash: ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)):0,
+      alpha: ent.dying? Math.max(0,1-ent.dieT/0.4):1,
+    });
+  } else if(kind==="ghost"){
+    for(let i=0;i<4;i++) groupOffset["wave"+i] = {dy: Math.sin(t*4+i*1.1)*0.7};
+    drawParts(ctx, ghostParts(), sx, sy + Math.sin(t*2.4)*2.2, {
+      flip: ent.facing<0, groupOffset, alpha:(ent.dying? Math.max(0,1-ent.dieT/0.4):0.88),
+      flash: ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)):0,
+    });
+  } else if(kind==="merchant"){
+    const sway = Math.sin(t*1.6);
+    groupOffset.robe = {dx: sway*0.15};
+    groupOffset.hood = {dx: sway*0.1};
+    groupOffset.lantern = {dy: Math.sin(t*3)*0.4, dx: Math.sin(t*3)*0.15};
+    drawParts(ctx, merchantParts(), sx, sy - Math.abs(sway)*0.3, {
+      flip: ent.facing<0, groupOffset,
+    });
+  } else if(kind==="boss"){
+    const sq = 1+Math.sin(walkPhase*0.8)*0.1;
+    squashX*=sq; squashY*=1/Math.max(0.85,sq);
+    groupOffset.body = {dy: Math.abs(Math.sin(walkPhase*0.8))*0.6};
+    drawParts(ctx, bossParts(ent.bossKind), sx, sy - Math.abs(Math.sin(walkPhase*0.8))*1, {
+      flip: ent.facing<0, groupOffset, sx:squashX*1.5, sy:squashY*1.5,
+      flash: ent.charging? 0.35+0.35*Math.sin(t*30) : (ent.hurtTimer>0? (0.5+0.5*Math.sin(ent.hurtTimer*40)):0),
+      alpha: ent.dying? Math.max(0,1-ent.dieT/0.6):1,
+    });
+  }
+}
+
+/* ---------- world / tiles ---------- */
+const TILE = 32;
+const MAPW = 46, MAPH = 34;
+const WALL=0, FLOOR=1, STAIRS=2;
+const VIEWW = 640, VIEWH = 416;
+
+let state = "title"; // title | playing | dead | win
+let floorNum = 1;
+let map, rooms, decor, torches;
+let player, enemies, items, particles, dmgNums, toastQueue;
+let merchant = null;
+let biome = BIOMES[0];
+let camX=0, camY=0, shakeT=0, shakeMag=0;
+let keys = {};
+let bestFloor = 0, bestGold = 0;
+let muted = false;
+
+try{
+  bestFloor = parseInt(localStorage.getItem("bramble_bestFloor")||"0",10)||0;
+  bestGold = parseInt(localStorage.getItem("bramble_bestGold")||"0",10)||0;
+}catch(e){}
+
+/* ---------- persistent meta-progression (survives death, saved to localStorage) ---------- */
+let meta = { shards:0, upgrades:{} };
+function loadMeta(){
+  try{
+    const raw = localStorage.getItem("bramble_meta");
+    if(raw){
+      const parsed = JSON.parse(raw);
+      meta = { shards: parsed.shards||0, upgrades: parsed.upgrades||{} };
+    }
+  }catch(e){}
+}
+function saveMeta(){
+  try{ localStorage.setItem("bramble_meta", JSON.stringify(meta)); }catch(e){}
+}
+loadMeta();
+
+function skillLevel(id){ return meta.upgrades[id]||0; }
+function applyMetaUpgrades(p){
+  p.mods.dmgAdd += skillLevel("edge")*1;
+  p.mods.cdMult *= Math.pow(0.95, skillLevel("fury"));
+  p.mods.knockbackMult *= Math.pow(1.1, skillLevel("momentum"));
+  p.baseMaxHp += skillLevel("hide")*1;
+  p.mods.secondWindCharges += skillLevel("secondchance")*1;
+  p.mods.regenRate += skillLevel("recovery")*0.08;
+  p.mods.goldMult *= Math.pow(1.1, skillLevel("treasure"));
+  p.pickupRadius *= Math.pow(1.15, skillLevel("magnetism"));
+  p.gold += skillLevel("headstart")*5;
+}
+function bankRun(){
+  const bonus = (player.bossesDefeatedThisRun||0)*10;
+  const earned = player.gold + bonus;
+  meta.shards += earned;
+  saveMeta();
+  return earned;
+}
+
+/* ---------- run save (checkpoint-style: floor + progression, not exact world state) ----------
+   Saved on floor entry and whenever gear/level/gold changes. The dungeon layout, enemies and
+   items are never saved - resuming regenerates a fresh floor at the saved floor number, with
+   the saved weapon, armor, level and level-up cards replayed on top of current meta upgrades. */
+function saveRun(){
+  if(!player) return;
+  try{
+    const data = {
+      floorNum,
+      weapon: player.weapon, armor: player.armor,
+      gold: player.gold, hp: player.hp,
+      level: player.level, xp: player.xp, xpToNext: player.xpToNext,
+      cardsChosen: player.cardsChosen||[],
+      bossesDefeatedThisRun: player.bossesDefeatedThisRun||0,
+    };
+    localStorage.setItem("bramble_run", JSON.stringify(data));
+  }catch(e){}
+}
+function hasSavedRun(){
+  try{ return !!localStorage.getItem("bramble_run"); }catch(e){ return false; }
+}
+function loadSavedRun(){
+  try{
+    const raw = localStorage.getItem("bramble_run");
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+function clearSavedRun(){
+  try{ localStorage.removeItem("bramble_run"); }catch(e){}
+}
+function continueRun(){
+  const saved = loadSavedRun();
+  if(!saved) return;
+  Audio1.unlock();
+  player = newPlayer();
+  (saved.cardsChosen||[]).forEach(id=>{
+    const card = CARDS.find(c=>c.id===id);
+    if(card) card.apply(player);
+  });
+  player.cardsChosen = saved.cardsChosen||[];
+  player.weapon = WEAPONS[saved.weapon] ? saved.weapon : "sword";
+  player.armor = ARMOR_SETS[saved.armor] ? saved.armor : "traveler";
+  player.gold = saved.gold||0;
+  player.level = saved.level||1;
+  player.xp = saved.xp||0;
+  player.xpToNext = saved.xpToNext||6;
+  player.bossesDefeatedThisRun = saved.bossesDefeatedThisRun||0;
+  recalcMaxHp();
+  player.hp = Math.max(1, Math.min(saved.hp!=null?saved.hp:player.maxhp, player.maxhp));
+  floorNum = clamp(saved.floorNum||1, 1, TOTAL_FLOORS);
+  particles = []; dmgNums = [];
+  spawnFloor();
+  state = "playing";
+  showOverlay(null);
+  updateTouchControls();
+}
+
+const SKILL_TREES = {
+  damage: { name:"Damage", color:"var(--coral)", nodes:[
+    { id:"edge", name:"Bramble Edge", desc:"+1 starting weapon damage", maxLevel:3, cost:l=>20+l*25 },
+    { id:"fury", name:"Fury", desc:"-5% attack cooldown", maxLevel:3, cost:l=>20+l*25 },
+    { id:"momentum", name:"Momentum", desc:"+10% knockback", maxLevel:2, cost:l=>25+l*30 },
+  ]},
+  survival: { name:"Survival", color:"var(--moss)", nodes:[
+    { id:"hide", name:"Thick Hide", desc:"+1 starting max HP", maxLevel:5, cost:l=>15+l*20 },
+    { id:"secondchance", name:"Second Chance", desc:"+1 starting Second Wind charge", maxLevel:2, cost:l=>40+l*40 },
+    { id:"recovery", name:"Quick Recovery", desc:"+regeneration over time", maxLevel:3, cost:l=>25+l*25 },
+  ]},
+  utility: { name:"Utility", color:"var(--lavender)", nodes:[
+    { id:"treasure", name:"Treasure Hunter", desc:"+10% gold gained", maxLevel:3, cost:l=>20+l*20 },
+    { id:"magnetism", name:"Magnetism", desc:"+15% pickup radius", maxLevel:3, cost:l=>20+l*20 },
+    { id:"headstart", name:"Head Start", desc:"+5 starting gold", maxLevel:3, cost:l=>15+l*15 },
+  ]},
+};
+
+function genMap(){
+  map = new Array(MAPH);
+  for(let y=0;y<MAPH;y++) map[y]=new Array(MAPW).fill(WALL);
+  rooms = [];
+  const tries = 60;
+  for(let i=0;i<tries;i++){
+    const w = randi(4,8), h = randi(4,7);
+    const x = randi(1, MAPW-w-2), y = randi(1, MAPH-h-2);
+    const r = {x,y,w,h};
+    let ok = true;
+    for(const o of rooms){
+      if(x-1 < o.x+o.w+1 && x+w+1 > o.x-1 && y-1 < o.y+o.h+1 && y+h+1 > o.y-1){ ok=false; break; }
+    }
+    if(ok){ rooms.push(r); if(rooms.length>=10) break; }
+  }
+  if(rooms.length<3){ rooms.push({x:2,y:2,w:6,h:6}); rooms.push({x:MAPW-9,y:MAPH-9,w:6,h:6}); }
+  for(const r of rooms){
+    for(let y=r.y;y<r.y+r.h;y++) for(let x=r.x;x<r.x+r.w;x++) map[y][x]=FLOOR;
+  }
+  for(let i=1;i<rooms.length;i++){
+    const a = center(rooms[i-1]), b = center(rooms[i]);
+    if(Math.random()<0.5){ carveH(a.x,b.x,a.y); carveV(a.y,b.y,b.x); }
+    else { carveV(a.y,b.y,a.x); carveH(a.x,b.x,b.y); }
+  }
+  const stairsRoom = rooms[rooms.length-1];
+  const sc = center(stairsRoom);
+  map[sc.y][sc.x] = STAIRS;
+
+  decor = [];
+  torches = [];
+  for(const r of rooms){
+    if(Math.random()<0.7 && (r.w>=5)){
+      torches.push({x:(r.x+0.5)*TILE, y:(r.y+0.5)*TILE});
+      torches.push({x:(r.x+r.w-0.5)*TILE, y:(r.y+0.5)*TILE});
+    }
+    if(Math.random()<0.5){
+      decor.push({x:rand(r.x+0.6,r.x+r.w-0.6)*TILE, y:rand(r.y+0.6,r.y+r.h-0.6)*TILE, type:choice(biome.decorTypes)});
+    }
+  }
+}
+function genBossArena(){
+  map = new Array(MAPH);
+  for(let y=0;y<MAPH;y++) map[y]=new Array(MAPW).fill(WALL);
+  const w = Math.min(24, MAPW-4), h = Math.min(18, MAPH-4);
+  const x0 = Math.floor((MAPW-w)/2), y0 = Math.floor((MAPH-h)/2);
+  for(let y=y0;y<y0+h;y++) for(let x=x0;x<x0+w;x++) map[y][x]=FLOOR;
+  rooms = [{x:x0,y:y0,w,h}];
+
+  decor = [];
+  torches = [];
+  const torchCols = 4;
+  for(let i=0;i<torchCols;i++){
+    const tx = x0+1.5 + i*((w-3)/(torchCols-1));
+    torches.push({x:tx*TILE, y:(y0+0.6)*TILE});
+    torches.push({x:tx*TILE, y:(y0+h-0.6)*TILE});
+  }
+  for(let i=0;i<8;i++){
+    decor.push({x:rand(x0+1.2,x0+w-1.2)*TILE, y:rand(y0+1.2,y0+h-1.2)*TILE, type:choice(biome.decorTypes)});
+  }
+}
+function center(r){ return {x:Math.floor(r.x+r.w/2), y:Math.floor(r.y+r.h/2)}; }
+function carveH(x0,x1,y){ const a=Math.min(x0,x1),b=Math.max(x0,x1); for(let x=a;x<=b;x++) map[y][x]=FLOOR; }
+function carveV(y0,y1,x){ const a=Math.min(y0,y1),b=Math.max(y0,y1); for(let y=a;y<=b;y++) map[y][x]=FLOOR; }
+function tileAt(px,py){ const tx=Math.floor(px/TILE), ty=Math.floor(py/TILE); if(tx<0||ty<0||tx>=MAPW||ty>=MAPH) return WALL; return map[ty][tx]; }
+function solidAt(px,py){ return tileAt(px,py)===WALL; }
+
+/* ---------- spawning ---------- */
+function spawnFloor(){
+  biome = getBiome(floorNum);
+  if(floorNum === biome.range[1]){ spawnBossFloor(); return; }
+
+  genMap();
+  enemies = []; items = []; merchant = null; particles = particles||[]; dmgNums = dmgNums||[];
+  const startRoom = rooms[0] || {x:2,y:2,w:6,h:6};
+  const sc = center(startRoom);
+  player.x = (sc.x+0.5)*TILE; player.y = (sc.y+0.5)*TILE;
+  if(!Number.isFinite(player.x) || !Number.isFinite(player.y)){ player.x = 3*TILE; player.y = 3*TILE; }
+
+  const enemyRooms = rooms.slice(1, -1).length? rooms.slice(1,-1) : rooms.slice(1);
+  const biomeFloor = floorNum - biome.range[0] + 1; // 1-indexed floor within this biome
+  const baseCount = 3 + biomeFloor*2; // enemy count ramps per-biome; enemy stats still scale off the true floor
+
+  for(let i=0;i<baseCount;i++){
+    const r = choice(enemyRooms);
+    const p = randPointInRoom(r);
+    let types = ["slime","rat"];
+    if(biomeFloor>=2) types.push("bat");
+    if(biomeFloor>=3) types.push("ghost","ghost");
+    enemies.push(makeEnemy(choice(types), p.x, p.y));
+  }
+
+  const potionCount = 2, goldCount = randi(3,5);
+  for(let i=0;i<potionCount;i++){
+    const r = choice(rooms.slice(0,-1));
+    const p = randPointInRoom(r);
+    items.push({type:"potion", x:p.x, y:p.y, t:Math.random()*10});
+  }
+  for(let i=0;i<goldCount;i++){
+    const r = choice(rooms);
+    const p = randPointInRoom(r);
+    items.push({type:"gold", x:p.x, y:p.y, amount:randi(1,3), t:Math.random()*10});
+  }
+  if(biomeFloor===2 || biomeFloor===4){
+    const freeChoices = ["spear","axe","hammer"].filter(w=>w!==player.weapon);
+    const freeType = choice(freeChoices.length?freeChoices:["spear","axe","hammer"]);
+    const midRoom = rooms[Math.floor(rooms.length/2)];
+    const fp = randPointInRoom(midRoom);
+    items.push({type:"weaponPickup", weapon:freeType, x:fp.x, y:fp.y, t:0});
+
+    const choices = ["spear","axe","hammer"].filter(w=>w!==player.weapon);
+    const wtype = choice(choices.length?choices:["spear","axe","hammer"]);
+    const armorChoices = Object.keys(ARMOR_SETS).filter(k=>k!==player.armor);
+    const atype = choice(armorChoices.length?armorChoices:Object.keys(ARMOR_SETS));
+    const stairsRoom = rooms[rooms.length-1];
+    // hugging a side wall, well clear of the stairs tile that sits at the room's center
+    const hugLeft = Math.random()<0.5;
+    const mtx = hugLeft ? stairsRoom.x+0.8 : stairsRoom.x+stairsRoom.w-0.8;
+    const mty = stairsRoom.y+stairsRoom.h/2;
+    const p = {x:mtx*TILE, y:mty*TILE};
+    merchant = {
+      x:p.x, y:p.y, facing:-1, animT:Math.random()*10, armed:true,
+      offers:[
+        {kind:"weapon", weapon:wtype, price:WEAPONS[wtype].price, bought:false},
+        {kind:"armor", armor:atype, price:10, bought:false},
+        {kind:"potion", price:4, bought:false},
+        {kind:"heal", price:6, bought:false},
+      ],
+    };
+  }
+  if(biomeFloor===3){
+    const armorChoices = Object.keys(ARMOR_SETS).filter(k=>k!==player.armor);
+    const atype = choice(armorChoices.length?armorChoices:Object.keys(ARMOR_SETS));
+    const armorRoom = rooms[Math.floor(rooms.length/2)];
+    const ap = randPointInRoom(armorRoom);
+    items.push({type:"armorPickup", armor:atype, x:ap.x, y:ap.y, t:0});
+  }
+
+  if(biomeFloor===1 && floorNum>1){
+    toast(`Entering ${biome.name}...`);
+  } else {
+    toast(`Floor ${floorNum}`);
+  }
+  saveRun();
+}
+
+function spawnBossFloor(){
+  genBossArena();
+  enemies = []; items = []; merchant = null;
+  const r = rooms[0];
+  const cx = (r.x+r.w/2)*TILE;
+  player.x = cx; player.y = (r.y+r.h-2.5)*TILE;
+  if(!Number.isFinite(player.x) || !Number.isFinite(player.y)){ player.x = cx; player.y = (r.y+2)*TILE; }
+
+  enemies.push(makeEnemy("boss", cx, (r.y+2.5)*TILE, biome.bossKind));
+  enemies.push(makeEnemy(choice(["slime","bat"]), cx-90, (r.y+r.h/2)*TILE));
+  enemies.push(makeEnemy(choice(["slime","bat"]), cx+90, (r.y+r.h/2)*TILE));
+
+  toast(`${BOSSES[biome.bossKind].name} awakens!`);
+  Audio1.boss();
+  saveRun();
+}
+function randPointInRoom(r){
+  return {x:rand(r.x+0.7,r.x+r.w-0.7)*TILE, y:rand(r.y+0.7,r.y+r.h-0.7)*TILE};
+}
+function makeEnemy(type,x,y,bossKind){
+  const base = {type,x,y,facing:1,animT:Math.random()*10,moving:false,hurtTimer:0,attackTimer:0,dying:false,dieT:0,cooldown:0,wanderDir:{x:0,y:0},wanderT:0};
+  const dmgTier = 1+Math.floor((floorNum-1)/6);
+  const stats = {
+    slime:{hp:3+Math.floor(floorNum*0.6),dmg:dmgTier,speed:38,radius:12,contactCd:0.9,hue: choice(biome.slimeHues)},
+    rat:{hp:2+Math.floor(floorNum*0.4),dmg:dmgTier,speed:95,radius:10,contactCd:0.7},
+    bat:{hp:2+Math.floor(floorNum*0.4),dmg:dmgTier,speed:105,radius:10,contactCd:0.7},
+    ghost:{hp:4+Math.floor(floorNum*0.5),dmg:dmgTier+1,speed:55,radius:12,contactCd:0.9,noclip:true},
+    boss: BOSSES[bossKind || "boss"],
+  }[type];
+  return Object.assign(base, stats, {maxhp:stats.hp, bossKind: type==="boss" ? (bossKind||"boss") : undefined});
+}
+
+/* ---------- player ---------- */
+function newPlayer(){
+  const p = {
+    x:0,y:0,facing:1,radius:11,speed:150,
+    baseMaxHp:BASE_MAX_HP,weapon:"sword",armor:"traveler",
+    animT:0,moving:false,hurtTimer:0,invuln:0,
+    attackTimer:0,attackCd:0,swingAngle:0,swingHasHit:false,
+    gold:0,dying:false,dieT:0,bossesDefeatedThisRun:0,cardsChosen:[],
+    xp:0,level:1,xpToNext:6,pickupRadius:18,regenAccum:0,
+    mods:{
+      dmgAdd:0,cdMult:1,rangeMult:1,arcMult:1,knockbackMult:1,moveSpeedMult:1,
+      vampChance:0,regenRate:0,thorns:0,
+      swingMoveMult:1,doubleHitChance:0,secondWindCharges:0,goldMult:1,dmgReduction:0,
+    },
+  };
+  applyMetaUpgrades(p);
+  p.maxhp = p.baseMaxHp + (ARMOR_SETS[p.armor].maxHpBonus||0);
+  p.hp = p.maxhp;
+  return p;
+}
+function getEffectiveWeapon(){
+  const base = WEAPONS[player.weapon] || WEAPONS.sword;
+  const m = player.mods;
+  const armorDmgMult = getArmor().dmgMult || 1;
+  return {
+    ...base,
+    dmg: (base.dmg + m.dmgAdd) * armorDmgMult,
+    cooldown: base.cooldown * m.cdMult,
+    duration: base.duration * m.cdMult,
+    range: base.range * m.rangeMult,
+    arc: base.arc * m.arcMult,
+    knockback: base.knockback * m.knockbackMult,
+  };
+}
+
+/* ---------- particles / fx ---------- */
+function burst(x,y,color,n,opts){
+  opts=opts||{};
+  for(let i=0;i<n;i++){
+    const a = Math.random()*Math.PI*2;
+    const sp = rand(opts.minSp||30, opts.maxSp||90);
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp - (opts.up||0),life:0,maxLife:rand(0.3,0.6),color,size:rand(2,4),grav: opts.grav!=null?opts.grav:220});
+  }
+}
+function floatText(x,y,text,color){
+  dmgNums.push({x,y,text,color,life:0,maxLife:0.7});
+}
+function shake(mag,time){ shakeMag=Math.max(shakeMag,mag); shakeT=Math.max(shakeT,time); }
+let toastTimer=0;
+function toast(msg){
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  toastTimer = 2.2;
+}
+
+/* ---------- input ---------- */
+window.addEventListener("keydown", e=>{
+  keys[e.key.toLowerCase()]=true;
+  if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(e.key.toLowerCase())) e.preventDefault();
+});
+window.addEventListener("keyup", e=>{ keys[e.key.toLowerCase()]=false; });
+
+/* ---------- game flow ---------- */
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+
+function startGame(){
+  Audio1.unlock();
+  player = newPlayer();
+  floorNum = 1;
+  particles = []; dmgNums = [];
+  spawnFloor();
+  state = "playing";
+  showOverlay(null);
+  updateTouchControls();
+}
+function goDead(){
+  state = "dead";
+  Audio1.dead();
+  bestFloor = Math.max(bestFloor, floorNum);
+  bestGold = Math.max(bestGold, player.gold);
+  try{ localStorage.setItem("bramble_bestFloor", bestFloor); localStorage.setItem("bramble_bestGold", bestGold); }catch(e){}
+  const earned = bankRun();
+  clearSavedRun();
+  document.getElementById("deadFloor").textContent = floorNum;
+  document.getElementById("deadGold").textContent = player.gold;
+  document.getElementById("deadShards").textContent = earned;
+  showOverlay("ov-dead");
+  updateTouchControls();
+}
+function goWin(){
+  state = "win";
+  Audio1.win();
+  bestFloor = Math.max(bestFloor, TOTAL_FLOORS);
+  bestGold = Math.max(bestGold, player.gold);
+  try{ localStorage.setItem("bramble_bestFloor", bestFloor); localStorage.setItem("bramble_bestGold", bestGold); }catch(e){}
+  const earned = bankRun();
+  clearSavedRun();
+  document.getElementById("winFloor").textContent = TOTAL_FLOORS;
+  document.getElementById("winGold").textContent = player.gold;
+  document.getElementById("winShards").textContent = earned;
+  showOverlay("ov-win");
+  updateTouchControls();
+}
+function showOverlay(id){
+  ["ov-title","ov-howto","ov-shop","ov-levelup","ov-bossclear","ov-upgrades","ov-dead","ov-win"].forEach(k=>{
+    document.getElementById(k).hidden = (k!==id);
+  });
+}
+
+/* ---------- boss checkpoint: continue deeper, or bank shards and quit ---------- */
+function showBossClear(){
+  state = "bossclear";
+  document.getElementById("bossClearTitle").textContent = `${BOSSES[biome.bossKind].name} Defeated!`;
+  const previewBonus = (player.bossesDefeatedThisRun||0)*10;
+  document.getElementById("bcGold").textContent = player.gold;
+  document.getElementById("bcShards").textContent = player.gold + previewBonus;
+  showOverlay("ov-bossclear");
+  updateTouchControls();
+}
+document.getElementById("btnContinueRun").addEventListener("click", ()=>{
+  showOverlay(null);
+  state = "playing";
+  updateTouchControls();
+  nextFloor();
+});
+document.getElementById("btnBankQuit").addEventListener("click", ()=>{
+  bankRun();
+  clearSavedRun();
+  showOverlay("ov-title");
+  state = "title";
+  refreshTitleStats();
+  updateTouchControls();
+});
+
+/* ---------- skill trees (persistent meta-progression) ---------- */
+let upgradesReturnTo = "ov-title";
+function openUpgrades(fromOverlayId){
+  upgradesReturnTo = fromOverlayId;
+  buildUpgradesOverlay();
+  showOverlay("ov-upgrades");
+}
+function buildUpgradesOverlay(){
+  document.getElementById("shardsVal").textContent = meta.shards;
+  const container = document.getElementById("skillTrees");
+  container.innerHTML = "";
+  Object.entries(SKILL_TREES).forEach(([key, tree])=>{
+    const section = document.createElement("div");
+    section.className = "tree-section";
+    const heading = document.createElement("div");
+    heading.className = "tree-title";
+    heading.style.color = tree.color;
+    heading.textContent = tree.name;
+    section.appendChild(heading);
+    tree.nodes.forEach(node=>{
+      const lvl = skillLevel(node.id);
+      const maxed = lvl>=node.maxLevel;
+      const cost = maxed ? null : node.cost(lvl);
+      const afford = !maxed && meta.shards>=cost;
+      const row = document.createElement("div");
+      row.className = "tree-node";
+      row.innerHTML =
+        `<div class="tree-node-info">` +
+          `<div class="tree-node-name">${node.name} <span class="tree-node-lvl">${lvl}/${node.maxLevel}</span></div>` +
+          `<div class="tree-node-desc">${node.desc}</div>` +
+        `</div>`;
+      const btn = document.createElement("button");
+      btn.className = "tree-buy";
+      btn.textContent = maxed ? "MAX" : cost+" ◆";
+      btn.disabled = maxed || !afford;
+      btn.addEventListener("click", ()=>buySkill(node.id));
+      row.appendChild(btn);
+      section.appendChild(row);
+    });
+    container.appendChild(section);
+  });
+}
+function buySkill(nodeId){
+  let node = null;
+  for(const tree of Object.values(SKILL_TREES)){
+    const found = tree.nodes.find(n=>n.id===nodeId);
+    if(found){ node = found; break; }
+  }
+  if(!node) return;
+  const lvl = skillLevel(nodeId);
+  if(lvl>=node.maxLevel) return;
+  const cost = node.cost(lvl);
+  if(meta.shards<cost) return;
+  meta.shards -= cost;
+  meta.upgrades[nodeId] = lvl+1;
+  saveMeta();
+  Audio1.upgrade();
+  buildUpgradesOverlay();
+}
+document.getElementById("btnUpgradesClose").addEventListener("click", ()=>{
+  showOverlay(upgradesReturnTo);
+});
+document.getElementById("btnUpgradesTitle").addEventListener("click", ()=>openUpgrades("ov-title"));
+document.getElementById("btnUpgradesDead").addEventListener("click", ()=>openUpgrades("ov-dead"));
+document.getElementById("btnUpgradesWin").addEventListener("click", ()=>openUpgrades("ov-win"));
+function refreshTitleStats(){
+  if(bestFloor>0){
+    document.getElementById("bestRow").hidden=false;
+    document.getElementById("bestFloor").textContent = bestFloor;
+    document.getElementById("bestGold").textContent = bestGold;
+  }
+  document.getElementById("titleShards").textContent = meta.shards;
+  const saved = loadSavedRun();
+  const resumeBtn = document.getElementById("btnResumeRun");
+  resumeBtn.hidden = !saved;
+  if(saved) document.getElementById("resumeFloor").textContent = saved.floorNum||1;
+}
+document.getElementById("btnResumeRun").addEventListener("click", continueRun);
+
+/* ---------- tutorial / pause ---------- */
+// pausedFrom: "playing" (freeze the dungeon behind the overlay), "title" (about to
+// start for the first time), or the overlay id to restore ("ov-dead"/"ov-win").
+let pausedFrom = null;
+function currentOverlayId(){
+  for(const k of ["ov-title","ov-dead","ov-win"]){
+    if(!document.getElementById(k).hidden) return k;
+  }
+  return null;
+}
+function openHowto(){
+  if(state==="paused" || state==="shop" || state==="levelup" || state==="bossclear") return; // an overlay is already active - ignore
+  if(!document.getElementById("ov-upgrades").hidden) return; // skill trees open - ignore
+  if(state==="playing"){
+    pausedFrom = "playing";
+    state = "paused";
+  } else {
+    pausedFrom = currentOverlayId() || "ov-title";
+  }
+  document.getElementById("howtoGoLabel").textContent = (pausedFrom==="playing") ? "Resume" : "Let's Go!";
+  showOverlay("ov-howto");
+  updateTouchControls();
+}
+
+/* ---------- merchant shop ---------- */
+function shopItemLabel(offer){
+  if(offer.kind==="weapon") return WEAPONS[offer.weapon].name;
+  if(offer.kind==="armor") return ARMOR_SETS[offer.armor].name;
+  if(offer.kind==="potion") return "Wildberry Potion (+5 HP)";
+  if(offer.kind==="heal") return "Full Heal";
+  return "";
+}
+function shopIconClass(offer){
+  if(offer.kind==="weapon") return "shop-icon-"+offer.weapon;
+  if(offer.kind==="armor") return "shop-icon-armor";
+  return "shop-icon-"+offer.kind;
+}
+function buildShopOverlay(){
+  const list = document.getElementById("shopList");
+  list.innerHTML = "";
+  merchant.offers.forEach((offer, idx)=>{
+    const afford = player.gold >= offer.price;
+    const row = document.createElement("div");
+    row.className = "shop-row";
+    const iconStyle = offer.kind==="armor" ? ` style="background:${ARMOR_SETS[offer.armor].chest}"` : "";
+    row.innerHTML =
+      `<div class="shop-icon ${shopIconClass(offer)}"${iconStyle}></div>` +
+      `<div class="shop-info">` +
+        `<div class="shop-name">${shopItemLabel(offer)}</div>` +
+        `<div class="shop-price">${offer.price}g</div>` +
+      `</div>`;
+    const btn = document.createElement("button");
+    btn.className = "shop-buy";
+    btn.textContent = offer.bought ? "Sold" : "Buy";
+    btn.disabled = offer.bought || !afford;
+    btn.addEventListener("click", ()=>buyOffer(idx));
+    row.appendChild(btn);
+    list.appendChild(row);
+  });
+}
+function buyOffer(idx){
+  const offer = merchant && merchant.offers[idx];
+  if(!offer || offer.bought || player.gold < offer.price) return;
+  player.gold -= offer.price;
+  offer.bought = true;
+  if(offer.kind==="weapon"){
+    player.weapon = offer.weapon;
+    player.attackTimer = 0; player.attackCd = 0; player.swingHasHit = false;
+    toast(`Bought the ${WEAPONS[offer.weapon].name}!`);
+  } else if(offer.kind==="armor"){
+    player.armor = offer.armor;
+    recalcMaxHp();
+    toast(`Equipped the ${ARMOR_SETS[offer.armor].name}!`);
+  } else if(offer.kind==="potion"){
+    player.hp = Math.min(player.maxhp, player.hp+5);
+    toast("Quaffed a potion! +5 HP");
+  } else if(offer.kind==="heal"){
+    player.hp = player.maxhp;
+    toast("Fully healed!");
+  }
+  Audio1.upgrade();
+  burst(player.x, player.y-14, "#fff", 10, {maxSp:90,up:40});
+  buildShopOverlay();
+  renderHUDCanvas();
+  saveRun();
+}
+function openShop(){
+  state = "shop";
+  buildShopOverlay();
+  showOverlay("ov-shop");
+  updateTouchControls();
+}
+document.getElementById("btnShopLeave").addEventListener("click", ()=>{
+  state = "playing";
+  showOverlay(null);
+  updateTouchControls();
+});
+
+/* ---------- leveling / ability cards ---------- */
+let pendingLevelUps = 0;
+let rerollsLeft = 1;
+let currentCardChoices = [];
+function gainXP(amount){
+  player.xp += amount;
+  while(player.xp >= player.xpToNext){
+    player.xp -= player.xpToNext;
+    player.level++;
+    player.xpToNext = Math.round(6 + player.level*4);
+    pendingLevelUps++;
+  }
+  if(pendingLevelUps>0 && state==="playing"){
+    triggerLevelUp();
+  }
+}
+function triggerLevelUp(){
+  if(pendingLevelUps<=0) return;
+  pendingLevelUps--;
+  rerollsLeft = 1;
+  currentCardChoices = drawCards(3);
+  buildLevelUpOverlay();
+  state = "levelup";
+  showOverlay("ov-levelup");
+  updateTouchControls();
+  Audio1.levelup();
+}
+function buildLevelUpOverlay(){
+  document.getElementById("levelupLevel").textContent = player.level;
+  const list = document.getElementById("cardList");
+  list.innerHTML = "";
+  currentCardChoices.forEach((card, idx)=>{
+    const el = document.createElement("div");
+    el.className = "card card-"+card.type;
+    el.innerHTML =
+      `<div class="card-badge">${card.type==="weapon"?"WEAPON":"MAGIC"}</div>` +
+      `<div class="card-name">${card.name}</div>` +
+      `<div class="card-desc">${card.desc}</div>`;
+    el.addEventListener("click", ()=>chooseCard(idx));
+    list.appendChild(el);
+  });
+  const rerollBtn = document.getElementById("btnReroll");
+  rerollBtn.disabled = rerollsLeft<=0;
+  rerollBtn.textContent = rerollsLeft>0 ? "Reroll" : "No rerolls left";
+}
+function chooseCard(idx){
+  const card = currentCardChoices[idx];
+  if(!card) return;
+  card.apply(player);
+  player.cardsChosen = player.cardsChosen||[];
+  player.cardsChosen.push(card.id);
+  toast(`${card.name}!`);
+  Audio1.upgrade();
+  burst(player.x, player.y-14, card.type==="weapon"?"#ffd27a":"#b19bff", 14, {maxSp:110,up:50});
+  renderHUDCanvas();
+  saveRun();
+  if(pendingLevelUps>0){
+    triggerLevelUp();
+  } else {
+    state = "playing";
+    showOverlay(null);
+    updateTouchControls();
+  }
+}
+document.getElementById("btnReroll").addEventListener("click", ()=>{
+  if(rerollsLeft<=0) return;
+  rerollsLeft--;
+  currentCardChoices = drawCards(3);
+  buildLevelUpOverlay();
+});
+document.getElementById("btnStart").addEventListener("click", openHowto);
+document.getElementById("help").addEventListener("click", openHowto);
+document.getElementById("btnHowtoGo").addEventListener("click", ()=>{
+  if(pausedFrom==="playing"){
+    state = "playing";
+    showOverlay(null);
+  } else if(pausedFrom==="ov-title" || pausedFrom===null){
+    startGame();
+  } else {
+    // came from the death/win screen via the help button - return to it
+    showOverlay(pausedFrom);
+  }
+  pausedFrom = null;
+  updateTouchControls();
+});
+document.getElementById("btnRetry").addEventListener("click", startGame);
+document.getElementById("btnAgain").addEventListener("click", startGame);
+document.getElementById("mute").addEventListener("click", ()=>{
+  muted = !muted; Audio1.setMuted(muted);
+  document.getElementById("mute").textContent = muted? "🔇":"🔊";
+});
+
+/* ---------- touch controls (virtual joystick) ---------- */
+const isTouchDevice = matchMedia("(pointer:coarse)").matches || ("ontouchstart" in window);
+const joystick = document.getElementById("joystick");
+const joyknob = document.getElementById("joyknob");
+let joyVec = {x:0,y:0}, joyActive = false, joyPointerId = null, joyCenter = {x:0,y:0};
+const JOY_RADIUS = 40;
+
+function updateTouchControls(){
+  joystick.hidden = !(isTouchDevice && state==="playing");
+}
+window.addEventListener("resize", updateTouchControls);
+
+function joyMove(clientX, clientY){
+  let dx = clientX - joyCenter.x, dy = clientY - joyCenter.y;
+  const dist = Math.hypot(dx,dy);
+  const clamped = Math.min(dist, JOY_RADIUS);
+  const ang = Math.atan2(dy,dx);
+  const kx = Math.cos(ang)*clamped, ky = Math.sin(ang)*clamped;
+  joyknob.style.transform = `translate(${kx}px, ${ky}px)`;
+  const mag = clamped/JOY_RADIUS;
+  joyVec = dist>2 ? {x:Math.cos(ang)*mag, y:Math.sin(ang)*mag} : {x:0,y:0};
+}
+function joyReset(){
+  joyActive = false; joyPointerId = null;
+  joyVec = {x:0,y:0};
+  joyknob.style.transform = "translate(0,0)";
+}
+joystick.addEventListener("pointerdown", e=>{
+  joyActive = true; joyPointerId = e.pointerId;
+  const rect = joystick.getBoundingClientRect();
+  joyCenter = {x:rect.left+rect.width/2, y:rect.top+rect.height/2};
+  try{ joystick.setPointerCapture(e.pointerId); }catch(err){}
+  joyMove(e.clientX, e.clientY);
+  e.preventDefault();
+});
+joystick.addEventListener("pointermove", e=>{
+  if(!joyActive || e.pointerId!==joyPointerId) return;
+  joyMove(e.clientX, e.clientY);
+  e.preventDefault();
+});
+["pointerup","pointercancel","pointerleave"].forEach(evt=>{
+  joystick.addEventListener(evt, e=>{
+    if(e.pointerId!==joyPointerId) return;
+    joyReset();
+  });
+});
+
+refreshTitleStats();
+
+/* ---------- update ---------- */
+function showDebug(err){
+  const box = document.getElementById("debugbox");
+  box.style.display = "block";
+  box.textContent = "Error: " + (err && err.message ? err.message : err) +
+    (err && err.stack ? "\n" + err.stack.split("\n").slice(0,4).join("\n") : "");
+  console.error(err);
+}
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(0.033, (now-last)/1000);
+  last = now;
+  try{
+    update(dt);
+    render();
+  }catch(err){
+    showDebug(err);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+function moveWithCollision(ent, dx, dy){
+  const r = ent.radius;
+  if(dx!==0){
+    const nx = ent.x + dx;
+    if(!ent.noclip && (solidAt(nx-r, ent.y-4) || solidAt(nx+r, ent.y-4) || solidAt(nx-r, ent.y+r*0.6) || solidAt(nx+r, ent.y+r*0.6))){
+      // blocked
+    } else ent.x = nx;
+  }
+  if(dy!==0){
+    const ny = ent.y + dy;
+    if(!ent.noclip && (solidAt(ent.x-r, ny-4) || solidAt(ent.x+r, ny-4) || solidAt(ent.x-r, ny+r*0.6) || solidAt(ent.x+r, ny+r*0.6))){
+      // blocked
+    } else ent.y = ny;
+  }
+}
+
+function update(dt){
+  if(toastTimer>0){ toastTimer-=dt; if(toastTimer<=0) document.getElementById("toast").classList.remove("show"); }
+  if(merchant) merchant.animT += dt;
+
+  if(state!=="playing"){
+    // idle title-screen animation for player preview
+    if(player) player.animT += dt;
+    updateParticles(dt);
+    return;
+  }
+
+  // input (keyboard + virtual joystick)
+  let mx=0,my=0;
+  if(keys["a"]||keys["arrowleft"]) mx-=1;
+  if(keys["d"]||keys["arrowright"]) mx+=1;
+  if(keys["w"]||keys["arrowup"]) my-=1;
+  if(keys["s"]||keys["arrowdown"]) my+=1;
+  mx += joyVec.x; my += joyVec.y;
+  const rawLen = Math.hypot(mx,my);
+  const moving = rawLen > 0.08;
+  player.moving = moving && player.attackTimer<=0;
+  if(moving){
+    const wpn = getEffectiveWeapon();
+    const dirLen = rawLen||1;
+    const inputMag = Math.min(rawLen,1);
+    const armorSpeedMult = getArmor().moveSpeedMult || 1;
+    const spd = player.speed*player.mods.moveSpeedMult*armorSpeedMult*inputMag*(player.attackTimer>0?wpn.moveSlow*player.mods.swingMoveMult:1);
+    moveWithCollision(player, (mx/dirLen)*spd*dt, (my/dirLen)*spd*dt);
+    if(mx!==0) player.facing = mx>0?1:-1;
+  }
+  player.animT += dt;
+  if(player.hurtTimer>0) player.hurtTimer-=dt;
+  if(player.invuln>0) player.invuln-=dt;
+  updatePlayerAttack(dt);
+
+  // enemies
+  for(const en of enemies){
+    en.animT += dt;
+    if(en.hurtTimer>0) en.hurtTimer-=dt;
+    if(en.cooldown>0) en.cooldown-=dt;
+    if(en.attackTimer>0) en.attackTimer-=dt;
+    if(en.dying){ en.dieT+=dt; continue; }
+
+    const d2 = dist2(en.x,en.y,player.x,player.y);
+    let tx=0,ty=0;
+    en.moving = false;
+
+    if(en.type==="boss"){
+      updateBoss(en, dt, d2);
+      continue;
+    }
+
+    const senseR = en.type==="ghost"? 260 : 170;
+    if(d2 < senseR*senseR){
+      const d = Math.sqrt(d2)||1;
+      tx = (player.x-en.x)/d; ty=(player.y-en.y)/d;
+      if(en.type==="bat"){
+        en.wanderT-=dt;
+        if(en.wanderT<=0){ en.jx=rand(-0.6,0.6); en.jy=rand(-0.6,0.6); en.wanderT=rand(0.2,0.5); }
+        tx+=en.jx; ty+=en.jy;
+      }
+      en.moving = true;
+    } else {
+      en.wanderT-=dt;
+      if(en.wanderT<=0){
+        const a = Math.random()*Math.PI*2;
+        en.wanderDir = {x:Math.cos(a), y:Math.sin(a)};
+        en.wanderT = rand(0.8,1.8);
+      }
+      if(Math.random()<0.985){ tx=en.wanderDir.x*0.5; ty=en.wanderDir.y*0.5; en.moving=true; }
+    }
+    const len = Math.hypot(tx,ty)||1;
+    moveWithCollision(en, (tx/len)*en.speed*dt, (ty/len)*en.speed*dt);
+    if(tx!==0) en.facing = tx>0?1:-1;
+
+    // contact combat both ways
+    handleContact(en);
+  }
+  enemies = enemies.filter(en=> !(en.dying && en.dieT>0.5));
+
+  // items
+  for(const it of items){ it.t+=dt; }
+  for(let i=items.length-1;i>=0;i--){
+    const it = items[i];
+    if(dist2(it.x,it.y,player.x,player.y) < (player.pickupRadius*player.pickupRadius)){
+      pickup(it);
+      items.splice(i,1);
+    }
+  }
+
+  // passive regeneration (from cards and/or worn armor)
+  const totalRegenRate = player.mods.regenRate + (getArmor().regenRate||0);
+  if(totalRegenRate>0 && player.hp<player.maxhp){
+    player.regenAccum += totalRegenRate*dt;
+    if(player.regenAccum>=1){
+      const heal = Math.floor(player.regenAccum);
+      player.hp = Math.min(player.maxhp, player.hp+heal);
+      player.regenAccum -= heal;
+      floatText(player.x, player.y-30, "+"+heal, "#8fd694");
+    }
+  }
+
+  // stairs (guard state==="playing": a gem picked up this same frame may have
+  // already opened the level-up overlay, and stairs/shop must not clobber it)
+  if(state==="playing" && !player.dying && tileAt(player.x,player.y)===STAIRS){
+    nextFloor();
+  }
+
+  // merchant (approach to browse; must step away before re-triggering)
+  if(state==="playing" && merchant){
+    const d = Math.hypot(merchant.x-player.x, merchant.y-player.y);
+    const closeR = player.radius+22, farR = closeR+18;
+    if(!merchant.armed && d>farR) merchant.armed = true;
+    if(merchant.armed && d<closeR && !player.dying){
+      merchant.armed = false;
+      openShop();
+    }
+  }
+
+  updateParticles(dt);
+
+  // camera
+  const targetX = clamp(player.x - VIEWW/2, 0, MAPW*TILE-VIEWW);
+  const targetY = clamp(player.y - VIEWH/2, 0, MAPH*TILE-VIEWH);
+  camX = lerp(camX, targetX, Math.min(1,dt*8));
+  camY = lerp(camY, targetY, Math.min(1,dt*8));
+  if(!Number.isFinite(camX)) camX = 0;
+  if(!Number.isFinite(camY)) camY = 0;
+  if(shakeT>0){ shakeT-=dt; if(shakeT<=0) shakeMag=0; }
+
+  if(player.hp<=0 && !player.dying){
+    if(player.mods.secondWindCharges>0){
+      player.mods.secondWindCharges--;
+      player.hp = 1;
+      player.invuln = 1.5;
+      toast("Second Wind! Saved from death!");
+      Audio1.upgrade();
+      burst(player.x, player.y-14, "#ffd27a", 16, {maxSp:130,up:60});
+      shake(6,0.25);
+    } else {
+      player.dying = true; player.dieT=0;
+    }
+  }
+  if(player.dying){
+    player.dieT += dt;
+    if(player.dieT>0.6) goDead();
+  }
+}
+
+function updateBoss(en, dt, d2){
+  en.chargeT = en.chargeT||0;
+  en.telegraphT = en.telegraphT||0;
+  if(en.charging){
+    en.chargeT -= dt;
+    moveWithCollision(en, en.cx*220*dt, en.cy*220*dt);
+    if(en.chargeT<=0){ en.charging=false; }
+  } else if(en.telegraphT>0){
+    en.telegraphT -= dt;
+    if(en.telegraphT<=0){
+      const d = Math.sqrt(d2)||1;
+      en.cx=(player.x-en.x)/d; en.cy=(player.y-en.y)/d;
+      en.charging=true; en.chargeT=0.45;
+    }
+  } else {
+    const d = Math.sqrt(d2)||1;
+    if(d2<300*300){
+      moveWithCollision(en, (player.x-en.x)/d*en.speed*dt, (player.y-en.y)/d*en.speed*dt);
+      if(player.x!==en.x) en.facing = (player.x-en.x)>0?1:-1;
+      en.moving = true;
+      en.telegraphT = Math.random()<0.006 ? 0.6 : 0;
+    }
+  }
+  handleContact(en);
+}
+
+function handleContact(en){
+  const rr = (en.radius+player.radius);
+  const touching = dist2(en.x,en.y,player.x,player.y) < rr*rr;
+  if(!touching) return;
+
+  // enemy hits player (the player's own attacks are range/arc-based - see updatePlayerAttack)
+  if(player.invuln<=0 && en.cooldown<=0 && !en.dying){
+    const totalReduction = Math.min(0.75, player.mods.dmgReduction + (getArmor().dmgReduction||0));
+    const dmg = Math.max(1, Math.round(en.dmg*(1-totalReduction)));
+    player.hp -= dmg;
+    player.hurtTimer = 0.35; player.invuln = 0.9;
+    en.cooldown = en.contactCd;
+    const ang = Math.atan2(player.y-en.y, player.x-en.x);
+    player.x += Math.cos(ang)*14; player.y += Math.sin(ang)*14;
+    floatText(player.x, player.y-26, "-"+dmg, "#ff9d9d");
+    burst(player.x,player.y-14,"#ff6f91",6,{maxSp:100,up:30});
+    shake(5,0.16);
+    Audio1.hurt();
+    if(player.mods.thorns>0 && !en.dying){
+      hitEnemy(en, player.mods.thorns, Math.atan2(en.y-player.y, en.x-player.x), 4);
+    }
+  }
+}
+
+function angleDiff(a,b){
+  let d = (a-b) % (Math.PI*2);
+  if(d>Math.PI) d -= Math.PI*2;
+  if(d<-Math.PI) d += Math.PI*2;
+  return d;
+}
+
+function hitEnemy(en, dmg, angle, knockback){
+  en.hp -= dmg;
+  en.hurtTimer = 0.3;
+  en.x += Math.cos(angle)*knockback;
+  en.y += Math.sin(angle)*knockback;
+  burst(en.x, en.y-14, "#fff", 5, {maxSp:100,up:36});
+  floatText(en.x, en.y-26, "-"+dmg, "#ff6f91");
+  if(en.hp<=0 && !en.dying){
+    en.dying = true; en.dieT=0;
+    Audio1.death();
+    const deathColor = en.type==="slime" ? COL.slime : en.type==="boss" ? BOSSES[en.bossKind].bodyColor : "#e6dcff";
+    burst(en.x,en.y-14, deathColor, 14, {maxSp:160,up:60});
+    shake(en.type==="boss"?10:4, en.type==="boss"?0.3:0.15);
+    if(en.type==="boss"){
+      const isFinalBoss = floorNum>=TOTAL_FLOORS;
+      player.bossesDefeatedThisRun = (player.bossesDefeatedThisRun||0) + 1;
+      toast(`${BOSSES[en.bossKind].name} has fallen!`);
+      if(isFinalBoss) setTimeout(()=>goWin(), 900);
+      else setTimeout(()=>showBossClear(), 900);
+    }
+    if(Math.random()<0.4 || en.type==="boss"){
+      const amt = en.type==="boss"? 20 : randi(1,3);
+      items.push({type:"gold", x:en.x, y:en.y, amount:amt, t:0});
+    }
+    const gemValue = en.type==="boss" ? 15 : en.type==="ghost" ? 2 : 1;
+    items.push({type:"gem", x:en.x+rand(-6,6), y:en.y+rand(-6,6), value:gemValue, t:0});
+  }
+}
+
+/* Player attacks are automatic: when an enemy comes within the current weapon's
+   range and the swing is off cooldown, the player swings toward it. Damage lands
+   partway through the swing animation and hits every enemy inside the weapon's
+   arc, so wide weapons (axe/hammer) can hit multiple foes at once while the
+   spear reaches further in a narrow line. */
+function updatePlayerAttack(dt){
+  const wpn = getEffectiveWeapon();
+  if(player.attackCd>0) player.attackCd -= dt;
+
+  if(player.attackTimer>0){
+    const impactAt = wpn.duration*0.55;
+    const wasAboveImpact = player.attackTimer > impactAt;
+    player.attackTimer -= dt;
+    if(wasAboveImpact && player.attackTimer<=impactAt && !player.swingHasHit){
+      player.swingHasHit = true;
+      applySwing(wpn);
+    }
+    if(player.attackTimer<0) player.attackTimer = 0;
+  } else if(player.attackCd<=0){
+    let best=null, bestD=Infinity;
+    for(const en of enemies){
+      if(en.dying) continue;
+      const d = Math.hypot(en.x-player.x, en.y-player.y) - en.radius;
+      if(d<=wpn.range && d<bestD){ bestD=d; best=en; }
+    }
+    if(best){
+      player.swingAngle = Math.atan2(best.y-player.y, best.x-player.x);
+      player.facing = Math.cos(player.swingAngle)>=0 ? 1 : -1;
+      player.attackTimer = wpn.duration;
+      player.attackCd = wpn.cooldown;
+      player.swingHasHit = false;
+    }
+  }
+}
+
+function applySwing(wpn){
+  let hitCount = 0;
+  for(const en of enemies){
+    if(en.dying) continue;
+    const dx=en.x-player.x, dy=en.y-player.y;
+    const dist = Math.hypot(dx,dy);
+    if(dist > wpn.range+en.radius) continue;
+    const ang = Math.atan2(dy,dx);
+    if(Math.abs(angleDiff(ang, player.swingAngle)) > wpn.arc/2) continue;
+    hitEnemy(en, wpn.dmg, ang, wpn.knockback);
+    if(wpn.stun) en.cooldown = Math.max(en.cooldown, wpn.stun);
+    if(player.mods.doubleHitChance>0 && Math.random()<player.mods.doubleHitChance && !en.dying){
+      hitEnemy(en, wpn.dmg, ang, wpn.knockback*0.5);
+    }
+    if(player.mods.vampChance>0 && Math.random()<player.mods.vampChance && player.hp<player.maxhp){
+      player.hp = Math.min(player.maxhp, player.hp+1);
+      floatText(player.x, player.y-30, "+1", "#8fd694");
+    }
+    hitCount++;
+  }
+  if(hitCount>0){
+    Audio1.hit();
+    shake(wpn.knockback>18?6:3, wpn.knockback>18?0.18:0.12);
+  }
+}
+
+function pickup(it){
+  if(it.type==="potion"){
+    player.hp = Math.min(player.maxhp, player.hp+3);
+    toast("Found a wildberry potion! +3 HP");
+    Audio1.pickup();
+    burst(it.x,it.y-10, COL.moss, 10, {maxSp:80,up:40});
+  } else if(it.type==="gold"){
+    player.gold += Math.round(it.amount*player.mods.goldMult);
+    Audio1.gold();
+    burst(it.x,it.y-10, COL.amber, 6, {maxSp:70,up:30});
+  } else if(it.type==="weaponPickup"){
+    player.weapon = it.weapon;
+    player.attackTimer = 0; player.attackCd = 0; player.swingHasHit = false;
+    toast(`Picked up the ${WEAPONS[it.weapon].name}!`);
+    Audio1.upgrade();
+    burst(it.x,it.y-10, "#fff", 16, {maxSp:120,up:60});
+    shake(4,0.2);
+  } else if(it.type==="gem"){
+    Audio1.xp();
+    floatText(it.x, it.y-20, "+"+it.value+" XP", "#b19bff");
+    burst(it.x,it.y-10, "#b19bff", 8, {maxSp:70,up:30});
+    gainXP(it.value);
+  } else if(it.type==="armorPickup"){
+    player.armor = it.armor;
+    recalcMaxHp();
+    toast(`Equipped the ${ARMOR_SETS[it.armor].name}!`);
+    Audio1.upgrade();
+    burst(it.x,it.y-10, ARMOR_SETS[it.armor].chest, 16, {maxSp:120,up:60});
+    shake(4,0.2);
+  }
+  saveRun();
+}
+
+function nextFloor(){
+  Audio1.stairs();
+  floorNum++;
+  if(floorNum>TOTAL_FLOORS){ goWin(); return; }
+  spawnFloor();
+}
+
+function updateParticles(dt){
+  for(const p of particles){
+    p.life+=dt; p.vy += (p.grav||0)*dt;
+    p.x += p.vx*dt; p.y += p.vy*dt;
+  }
+  particles = particles.filter(p=>p.life<p.maxLife);
+  for(const d of dmgNums){ d.life+=dt; d.y -= 26*dt; }
+  dmgNums = dmgNums.filter(d=>d.life<d.maxLife);
+}
+
+/* ---------- render ---------- */
+function render(){
+  ctx.fillStyle = "#120a1a";
+  ctx.fillRect(0,0,VIEWW,VIEWH);
+
+  ctx.save();
+  let sx=0, sy=0;
+  if(shakeT>0){ sx = rand(-shakeMag,shakeMag); sy = rand(-shakeMag,shakeMag); }
+
+  if(state==="title"){
+    renderTitleScene();
+    ctx.restore();
+    return;
+  }
+
+  ctx.translate(-camX+sx, -camY+sy);
+  renderTiles();
+  renderDecor();
+  const drawList = [...items.map(it=>({it})), ...enemies.map(e=>({e})), {p:player}];
+  if(merchant) drawList.push({m:merchant});
+  drawList.sort((a,b)=>{
+    const ay = a.it? a.it.y : a.e? a.e.y : a.m? a.m.y : a.p.y;
+    const by = b.it? b.it.y : b.e? b.e.y : b.m? b.m.y : b.p.y;
+    return ay-by;
+  });
+  for(const d of drawList){
+    if(d.it) renderItem(d.it);
+    else if(d.e) drawCreature(ctx, d.e.type, d.e, 0, 0);
+    else if(d.m) drawCreature(ctx, "merchant", d.m, 0, 0);
+    else if(d.p) drawCreature(ctx, "player", d.p, 0, 0);
+  }
+  renderTorchGlow();
+  renderParticles();
+  renderDmgNums();
+  ctx.restore();
+
+  renderVignette();
+  renderHUDCanvas();
+}
+
+function renderTitleScene(){
+  ctx.fillStyle="#241732";
+  ctx.fillRect(0,0,VIEWW,VIEWH);
+  for(let y=0;y<VIEWH;y+=TILE) for(let x=0;x<VIEWW;x+=TILE){
+    ctx.fillStyle = ((x/TILE+y/TILE)%2===0) ? "#2b1c3c" : "#271a37";
+    ctx.fillRect(x,y,TILE,TILE);
+  }
+  updateParticles(0);
+  if(Math.random()<0.04) particles.push({x:rand(0,VIEWW),y:VIEWH+10,vx:rand(-6,6),vy:-rand(20,40),life:0,maxLife:rand(3,5),color:"#6b5a8a",size:rand(1,2.4),grav:0});
+  renderParticles();
+  if(player) drawCreature(ctx, "player", Object.assign({},player,{x:VIEWW/2,y:VIEWH/2+40,facing:1,hurtTimer:0,attackTimer:0}), 0,0);
+  renderVignette();
+}
+
+function renderTiles(){
+  const x0 = Math.max(0, Math.floor(camX/TILE)-1);
+  const y0 = Math.max(0, Math.floor(camY/TILE)-1);
+  const x1 = Math.min(MAPW, Math.ceil((camX+VIEWW)/TILE)+1);
+  const y1 = Math.min(MAPH, Math.ceil((camY+VIEWH)/TILE)+1);
+  for(let ty=y0;ty<y1;ty++){
+    for(let tx=x0;tx<x1;tx++){
+      const t = map[ty][tx];
+      const px=tx*TILE, py=ty*TILE;
+      if(t===WALL){
+        ctx.fillStyle=biome.wall;
+        ctx.fillRect(px,py,TILE,TILE);
+        ctx.fillStyle=biome.wallFace;
+        ctx.fillRect(px+2,py+2,TILE-4,TILE-6);
+        ctx.fillStyle=biome.wallTop;
+        ctx.fillRect(px+2,py+2,TILE-4,3);
+      } else {
+        ctx.fillStyle = ((tx+ty)%2===0) ? biome.floorA : biome.floorB;
+        ctx.fillRect(px,py,TILE,TILE);
+        if(t===STAIRS){
+          ctx.fillStyle=biome.stairsBg;
+          ctx.fillRect(px+4,py+4,TILE-8,TILE-8);
+          ctx.fillStyle=COL.amber;
+          ctx.fillRect(px+9,py+9,TILE-18,TILE-18);
+        }
+      }
+    }
+  }
+}
+function renderDecor(){
+  for(const d of decor){
+    if(d.x<camX-30||d.x>camX+VIEWW+30||d.y<camY-30||d.y>camY+VIEWH+30) continue;
+    if(d.type==="bone"){ ctx.fillStyle="#cdbfa8"; ctx.fillRect(d.x-6,d.y-2,12,3); ctx.fillRect(d.x-7,d.y-4,3,7); ctx.fillRect(d.x+4,d.y-4,3,7); }
+    else if(d.type==="crack"){ ctx.fillStyle="#231a2b"; ctx.fillRect(d.x-1,d.y-8,2,16); ctx.fillRect(d.x-5,d.y,4,2); }
+    else if(d.type==="moss"){ ctx.fillStyle="#5f8f5a"; ctx.fillRect(d.x-6,d.y-3,4,4); ctx.fillRect(d.x-1,d.y-5,4,4); ctx.fillRect(d.x+3,d.y-2,4,4); }
+    else if(d.type==="stump"){ ctx.fillStyle="#3a2a1c"; ctx.fillRect(d.x-6,d.y-3,12,5); ctx.fillStyle="#7a5a3a"; ctx.fillRect(d.x-5,d.y-6,10,4); ctx.fillStyle="#8f6f4a"; ctx.fillRect(d.x-2,d.y-6,4,1); }
+    else if(d.type==="fern"){ ctx.fillStyle="#3f5c2c"; ctx.fillRect(d.x-1,d.y-9,2,9); ctx.fillRect(d.x-6,d.y-7,5,2); ctx.fillRect(d.x+1,d.y-7,5,2); ctx.fillRect(d.x-5,d.y-4,4,2); ctx.fillRect(d.x+1,d.y-4,4,2); }
+    else if(d.type==="mushroom"){ ctx.fillStyle="#e8e0d0"; ctx.fillRect(d.x-1,d.y-3,2,4); ctx.fillStyle="#c94f5c"; ctx.beginPath(); ctx.ellipse(d.x,d.y-4,4,3,0,0,7); ctx.fill(); ctx.fillStyle="#f2dede"; ctx.fillRect(d.x-2,d.y-5,1,1); ctx.fillRect(d.x+1,d.y-4,1,1); }
+    else if(d.type==="shell"){ ctx.fillStyle="#d8c9b0"; ctx.beginPath(); ctx.arc(d.x,d.y,5,Math.PI,0); ctx.fill(); ctx.fillStyle="#c2ac8a"; ctx.fillRect(d.x-1,d.y-5,2,5); }
+    else if(d.type==="kelp"){ ctx.fillStyle="#2f6b4a"; ctx.fillRect(d.x-1,d.y-11,2,11); ctx.fillRect(d.x-5,d.y-8,4,2); ctx.fillRect(d.x+1,d.y-5,4,2); }
+    else if(d.type==="driftwood"){ ctx.fillStyle="#5a4a3a"; ctx.fillRect(d.x-8,d.y-2,16,3); ctx.fillStyle="#6f5c48"; ctx.fillRect(d.x-6,d.y-5,3,3); }
+  }
+}
+function renderTorchGlow(){
+  const now = performance.now();
+  for(const t of torches){
+    if(t.x<camX-60||t.x>camX+VIEWW+60||t.y<camY-60||t.y>camY+VIEWH+60) continue;
+    const flick = 0.75+Math.sin(now/120 + t.x)*0.06;
+    let glowRGB = "255,170,90";
+    if(biome.ambient==="firefly") glowRGB = "150,220,120";
+    else if(biome.ambient==="glow") glowRGB = "120,200,230";
+    const grd = ctx.createRadialGradient(t.x,t.y,4,t.x,t.y,70*flick);
+    grd.addColorStop(0,`rgba(${glowRGB},0.16)`);
+    grd.addColorStop(1,`rgba(${glowRGB},0)`);
+    ctx.fillStyle=grd;
+    ctx.fillRect(t.x-70,t.y-70,140,140);
+    if(biome.ambient==="torch"){
+      ctx.fillStyle="#3a2a22";
+      ctx.fillRect(t.x-2,t.y-14,4,16);
+      ctx.fillStyle=`hsl(${30+Math.sin(now/80+t.x)*8},90%,60%)`;
+      ctx.fillRect(t.x-3,t.y-20,6,7);
+    } else if(biome.ambient==="firefly"){
+      ctx.fillStyle="#3d2f1a";
+      ctx.fillRect(t.x-2,t.y-10,4,12);
+      ctx.fillStyle=`hsl(${110+Math.sin(now/90+t.x)*10},70%,60%)`;
+      ctx.beginPath(); ctx.ellipse(t.x,t.y-12,6,4,0,0,7); ctx.fill();
+    } else {
+      ctx.fillStyle="#16303c";
+      ctx.fillRect(t.x-2,t.y-12,4,14);
+      ctx.fillStyle=`hsl(${190+Math.sin(now/100+t.x)*10},80%,60%)`;
+      ctx.beginPath(); ctx.arc(t.x,t.y-16,5,0,7); ctx.fill();
+    }
+  }
+}
+function renderItem(it){
+  const bob = Math.sin(it.t*4)*3;
+  if(it.type==="potion"){
+    ctx.fillStyle="#5a4a68"; ctx.fillRect(it.x-5,it.y-6+bob,10,3);
+    ctx.fillStyle=COL.moss; ctx.fillRect(it.x-6,it.y-3+bob,12,10);
+    ctx.fillStyle="#c8f2cc"; ctx.fillRect(it.x-4,it.y-1+bob,3,3);
+  } else if(it.type==="gold"){
+    ctx.fillStyle="#c9860f"; ctx.beginPath(); ctx.ellipse(it.x,it.y+3,8,4,0,0,7); ctx.fill();
+    ctx.fillStyle=COL.amber; ctx.beginPath(); ctx.ellipse(it.x,it.y-1+bob*0.4,8,5,0,0,7); ctx.fill();
+  } else if(it.type==="weaponPickup"){
+    ctx.save(); ctx.translate(it.x,it.y+bob); ctx.rotate(Math.sin(it.t*2)*0.15);
+    drawWeaponIcon(it.weapon);
+    ctx.restore();
+    const grd = ctx.createRadialGradient(it.x,it.y,2,it.x,it.y,26);
+    grd.addColorStop(0,"rgba(245,185,66,0.35)"); grd.addColorStop(1,"rgba(245,185,66,0)");
+    ctx.fillStyle=grd; ctx.fillRect(it.x-26,it.y-26,52,52);
+  } else if(it.type==="gem"){
+    const big = it.value>=15;
+    ctx.save(); ctx.translate(it.x,it.y+bob*0.6); ctx.rotate(it.t*1.4);
+    ctx.fillStyle = big ? "#ffd27a" : "#8fd6ff";
+    ctx.beginPath();
+    ctx.moveTo(0,-7); ctx.lineTo(6,0); ctx.lineTo(0,7); ctx.lineTo(-6,0);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.beginPath();
+    ctx.moveTo(0,-7); ctx.lineTo(3,-1); ctx.lineTo(0,1); ctx.lineTo(-3,-1);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    const grd = ctx.createRadialGradient(it.x,it.y,1,it.x,it.y,18);
+    grd.addColorStop(0, big?"rgba(255,210,122,0.4)":"rgba(143,214,255,0.35)");
+    grd.addColorStop(1, "rgba(143,214,255,0)");
+    ctx.fillStyle=grd; ctx.fillRect(it.x-18,it.y-18,36,36);
+  } else if(it.type==="armorPickup"){
+    ctx.save(); ctx.translate(it.x,it.y+bob); ctx.rotate(Math.sin(it.t*2)*0.12);
+    drawArmorIcon(it.armor);
+    ctx.restore();
+    const grd = ctx.createRadialGradient(it.x,it.y,2,it.x,it.y,26);
+    grd.addColorStop(0, "rgba(255,255,255,0.28)");
+    grd.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle=grd; ctx.fillRect(it.x-26,it.y-26,52,52);
+  }
+}
+function drawArmorIcon(key){
+  const a = ARMOR_SETS[key] || ARMOR_SETS.traveler;
+  ctx.fillStyle = a.chest; fillSoftRect(ctx,-7,-6,14,13);
+  ctx.fillStyle = a.chestTrim; fillSoftRect(ctx,-7,-6,14,3);
+  ctx.fillStyle = a.helmet; fillSoftRect(ctx,-5,-15,10,9);
+  ctx.fillStyle = COL.ink; fillSoftRect(ctx,-2.5,-11,1.5,1.5); fillSoftRect(ctx,1,-11,1.5,1.5);
+}
+function drawWeaponIcon(type){
+  if(type==="spear"){
+    ctx.fillStyle="#c9a86e"; fillSoftRect(ctx,-2,-14,3,20);
+    ctx.fillStyle="#e8eef2"; fillSoftRect(ctx,-3,-20,5,7);
+  } else if(type==="axe"){
+    ctx.fillStyle=COL.boots; fillSoftRect(ctx,-2,-2,3,18);
+    ctx.fillStyle="#b3bcc7"; fillSoftRect(ctx,-9,-14,10,10);
+    ctx.fillStyle="#8a97a8"; fillSoftRect(ctx,-9,-14,10,3);
+  } else if(type==="hammer"){
+    ctx.fillStyle="#8a5a44"; fillSoftRect(ctx,-2,-2,3,18);
+    ctx.fillStyle="#9aa7b5"; fillSoftRect(ctx,-10,-16,16,10);
+    ctx.fillStyle="#cfd8e3"; fillSoftRect(ctx,-10,-16,16,3);
+  } else {
+    ctx.fillStyle=COL.metal; fillSoftRect(ctx,-2,-18,4,20);
+    ctx.fillStyle=COL.metalDark; fillSoftRect(ctx,-6,0,12,4);
+  }
+}
+function renderParticles(){
+  for(const p of particles){
+    ctx.globalAlpha = clamp(1-p.life/p.maxLife,0,1);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size/2, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+function renderDmgNums(){
+  ctx.font = "bold 13px 'Silkscreen', monospace";
+  ctx.textAlign="center";
+  for(const d of dmgNums){
+    ctx.globalAlpha = clamp(1-d.life/d.maxLife,0,1);
+    ctx.fillStyle="#00000055";
+    ctx.fillText(d.text, d.x+1, d.y+1);
+    ctx.fillStyle=d.color;
+    ctx.fillText(d.text, d.x, d.y);
+  }
+  ctx.globalAlpha=1;
+}
+function renderVignette(){
+  const g = ctx.createRadialGradient(VIEWW/2,VIEWH/2,VIEWH*0.35,VIEWW/2,VIEWH/2,VIEWH*0.75);
+  g.addColorStop(0,"rgba(0,0,0,0)");
+  g.addColorStop(1,"rgba(0,0,0,0.45)");
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,VIEWW,VIEWH);
+}
+
+/* hearts + floor number canvas HUD */
+const heartsCanvas = document.getElementById("heartsCanvas");
+const hctx = heartsCanvas.getContext("2d");
+function heartShape(cx,cy,s,filled){
+  hctx.fillStyle = filled? COL.tunicDark : "rgba(58,43,63,0.18)";
+  const u = s/6;
+  hctx.fillRect(cx-3*u,cy-2*u,2*u,2*u);
+  hctx.fillRect(cx+1*u,cy-2*u,2*u,2*u);
+  hctx.fillRect(cx-3*u,cy-0*u,6*u,2*u);
+  hctx.fillRect(cx-2*u,cy+2*u,4*u,1*u);
+  hctx.fillRect(cx-1*u,cy+3*u,2*u,1*u);
+  if(filled){
+    hctx.fillStyle=COL.tunic;
+    hctx.fillRect(cx-2*u,cy-1.4*u,1.6*u,1.6*u);
+  }
+}
+function renderHUDCanvas(){
+  hctx.clearRect(0,0,heartsCanvas.width,heartsCanvas.height);
+  const hp = player? player.hp : BASE_MAX_HP, maxhp = player? player.maxhp : BASE_MAX_HP;
+  const n = maxhp;
+  const spacing = Math.min(17, (heartsCanvas.width-8)/n);
+  for(let i=0;i<n;i++){
+    heartShape(6+i*spacing+6, 9, 13, i<hp);
+  }
+  document.getElementById("floorNum").textContent = floorNum;
+  document.getElementById("goldval").textContent = player? player.gold : 0;
+  document.getElementById("weaponName").textContent = (WEAPONS[player&&player.weapon] || WEAPONS.sword).short;
+  document.getElementById("armorName").textContent = (ARMOR_SETS[player&&player.armor] || ARMOR_SETS.traveler).name;
+  document.getElementById("levelVal").textContent = player? player.level : 1;
+  const xpPct = player ? clamp((player.xp/player.xpToNext)*100, 0, 100) : 0;
+  document.getElementById("xpFill").style.width = xpPct + "%";
+}
+
+/* ambient background dust behind cabinet */
+(function ambient(){
+  const c = document.getElementById("dust");
+  const dctx = c.getContext("2d");
+  function resize(){ c.width=innerWidth; c.height=innerHeight; }
+  resize(); window.addEventListener("resize",resize);
+  const stars = Array.from({length:60},()=>({x:Math.random(),y:Math.random(),s:rand(0.6,1.8),sp:rand(0.02,0.08),ph:Math.random()*10}));
+  function loop(){
+    dctx.clearRect(0,0,c.width,c.height);
+    const t = performance.now()/1000;
+    for(const s of stars){
+      const x = s.x*c.width, y = ((s.y*c.height + t*s.sp*20)%c.height);
+      const a = 0.15+0.15*Math.sin(t+s.ph);
+      dctx.fillStyle = `rgba(217,193,240,${a})`;
+      dctx.fillRect(x,y,s.s,s.s);
+    }
+    requestAnimationFrame(loop);
+  }
+  loop();
+})();
+
+renderHUDCanvas();
+player = newPlayer();
+})();
+</script>
