@@ -292,6 +292,10 @@
   .shop-icon-bow::after{ content:""; position:absolute; top:1px; left:2px; width:1px; height:24px; background:#e8eef2; }
   .shop-icon-gauntlets{ position:relative; width:11px; height:11px; background:#cfae4a; border-radius:3px; }
   .shop-icon-gauntlets::after{ content:""; position:absolute; left:14px; top:0; width:11px; height:11px; background:#cfae4a; border-radius:3px; }
+  .shop-icon-greatsword{ position:relative; width:7px; height:28px; background:#d9e1ea; border-radius:2px; }
+  .shop-icon-greatsword::after{ content:""; position:absolute; bottom:5px; left:-6px; width:19px; height:4px; background:#5a3d28; border-radius:2px; }
+  .shop-icon-nunchaku{ position:relative; width:5px; height:13px; background:#5a3d28; border-radius:2px; }
+  .shop-icon-nunchaku::after{ content:""; position:absolute; top:17px; left:0; width:5px; height:13px; background:#5a3d28; border-radius:2px; }
 
   .card-list{
     display:flex; gap:10px; flex-wrap:wrap; justify-content:center;
@@ -463,6 +467,35 @@
   .tag-companion{ background:rgba(230,168,120,.28); color:#e6a878; }
   .inv-empty{ font-size:11px; color:var(--lavender); text-align:left; padding:4px 2px; }
 
+  .compare-desc{ font-size:11px; color:var(--lavender); line-height:1.35; margin:-2px 0 6px; max-width:34ch; }
+  .compare-table{
+    width:100%; max-width:360px;
+    display:flex; flex-direction:column; gap:5px;
+    margin:2px 0;
+  }
+  .compare-head-row, .compare-row{
+    display:grid; grid-template-columns:1.3fr 1fr 1fr;
+    gap:6px; align-items:center;
+  }
+  .compare-head-row{
+    font-family:"Silkscreen",monospace; font-size:9px; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--lavender); padding:0 9px;
+  }
+  .compare-head-row span:nth-child(2), .compare-head-row span:nth-child(3){ text-align:center; }
+  .compare-row{
+    background:rgba(246,236,217,.08);
+    border:1px solid rgba(246,236,217,.16);
+    border-radius:9px; padding:7px 9px;
+  }
+  .compare-label{ font-size:11.5px; color:var(--parchment); text-align:left; }
+  .compare-val{
+    font-family:"Silkscreen",monospace; font-size:12px; text-align:center;
+    font-variant-numeric:tabular-nums; color:var(--parchment);
+  }
+  .compare-val.better{ color:#8fd694; }
+  .compare-val.worse{ color:#ff9d9d; }
+  .compare-actions{ display:flex; gap:10px; }
+
   .xpbar-wrap{
     position:relative;
     margin:0 10px;
@@ -591,7 +624,7 @@
 
     <div class="overlay" id="ov-title">
       <h1>Bramblekeep</h1>
-      <p>A small bunny knight, a very large dungeon. Get close to fight, find better weapons, find the stairs. Try not to get eaten.</p>
+      <p>A small woodland knight, a very large dungeon. Pick your animal, pick your class, then get close to fight, find better gear, and find the stairs. Try not to get eaten.</p>
       <div class="stat-row" id="bestRow" hidden>
         <div><span class="label">Best floor</span><span class="value" id="bestFloor">1</span></div>
         <div><span class="label">Best gold</span><span class="value" id="bestGold">0</span></div>
@@ -662,9 +695,18 @@
       <button class="playbtn" id="btnInventoryClose">Close</button>
     </div>
 
+    <div class="overlay" id="ov-gearcompare" hidden>
+      <h1 id="gearCompareTitle">New Gear Found</h1>
+      <div class="compare-table" id="compareWrap"></div>
+      <div class="compare-actions">
+        <button class="playbtn" id="btnGearEquip">Equip</button>
+        <button class="secondarybtn" id="btnGearLeave">Leave It</button>
+      </div>
+    </div>
+
     <div class="overlay" id="ov-dead" hidden>
       <h1>Nom nom nom&hellip;</h1>
-      <p>You were a very good bunny knight. The dungeon disagrees.</p>
+      <p>You were a very good <span id="deadAnimal">woodland</span> knight. The dungeon disagrees.</p>
       <div class="stat-row">
         <div><span class="label">Floor reached</span><span class="value" id="deadFloor">1</span></div>
         <div><span class="label">Gold collected</span><span class="value" id="deadGold">0</span></div>
@@ -676,7 +718,7 @@
 
     <div class="overlay" id="ov-win" hidden>
       <h1>Bramblekeep Conquered!</h1>
-      <p>From bramble stone to forest root to the deep tide, every realm bows to one very small, very determined bunny.</p>
+      <p>From bramble stone to forest root to the deep tide, every realm bows to one very small, very determined <span id="winAnimal">bunny</span>.</p>
       <div class="stat-row">
         <div><span class="label">Floors cleared</span><span class="value" id="winFloor">15</span></div>
         <div><span class="label">Gold collected</span><span class="value" id="winGold">0</span></div>
@@ -909,6 +951,9 @@ const SPRITES = {
   shoulder:[".oo.","ohho",".oo."],
   glove:   ["oho","obo",".o."],
   shin:    [".oo.","ohho","obbo",".oo."],
+  // shield: worn on the off-hand by armor sets with hasShield:true (see playerParts) -
+  // a round kite shield with a bright boss/rim so it reads clearly even at small scale
+  shield:  [".ohho.","ohbbho","ohbbho","ohbbho","ohbbho",".ohho.","..oo.."],
   // ---- enemies (recolored per hue/boss where noted) ----
   slime: ["...oooo...",".ohhhhhho.","ohhhhbbbbo","obbccccbbo","obebbbbebo","osbbbbbbso",".osssssso.","...oooo..."],
   batWingL: ["obbbb","ohhbb",".ohbb","..ob."],
@@ -951,6 +996,10 @@ const WEAPON_SPRITES = {
     palette:{s:"#e8eef2",b:"#8a5a44",g:"#5a3d28"} },
   gauntlets: { grid:[".GG.","GggG","GggG",".oo."],
     palette:{G:"#e8c96a",g:"#cfae4a",o:"#8a6a1a"} },
+  greatsword: { grid:[".bb.",".BB.",".bb.",".BB.",".bb.",".bb.",".bb.",".dd.","cccc",".gg.",".gg.",".gg.",".gg.",".dd."],
+    palette:{b:"#d9e1ea",B:"#f2f6fa",d:"#8a97a8",c:"#f5b942",g:"#5a3d28"} },
+  nunchaku: { grid:[".g.",".g.",".G.",".g.",".g.",".k.",".g.",".g.",".G.",".g.",".g."],
+    palette:{g:"#5a3d28",G:"#8a5a3a",k:"#2a2a2a"} },
 };
 function playerBodyPalette(animalId){
   const animal = ANIMALS[animalId] || ANIMALS.bunny;
@@ -985,8 +1034,12 @@ const WEAPONS = {
     desc:"Fires a fast arrow with excellent range." },
   gauntlets: { name:"Storm Gauntlets", short:"Gauntlets", dmg:1, range:24, arc:1.7, duration:0.09, cooldown:0.14, moveSlow:0.85, knockback:5, style:"jab", price:7,
     desc:"Blazing-fast jabs with almost no cooldown." },
+  greatsword: { name:"Bramble Greatsword", short:"Greatsword", dmg:4, range:36, arc:2.4, duration:0.38, cooldown:0.62, moveSlow:0.28, knockback:20, style:"cleave", price:13,
+    desc:"A massive two-handed blade - slow, but a wide, heavy cleave." },
+  nunchaku: { name:"Bramble Nunchaku", short:"Nunchaku", dmg:1, range:30, arc:2.2, duration:0.16, cooldown:0.22, moveSlow:0.6, knockback:8, style:"whirl", price:7,
+    desc:"Twin sticks spun in a fast, wide flurry." },
 };
-const FINDABLE_WEAPONS = ["spear","axe","hammer","staff","bow","gauntlets"];
+const FINDABLE_WEAPONS = ["spear","axe","hammer","staff","bow","gauntlets","greatsword","nunchaku"];
 
 /* ---------- bosses ---------- */
 const BOSSES = {
@@ -1022,28 +1075,32 @@ function getBiome(floor){
 /* ---------- armor sets ----------
    Each set is worn as a whole (helmet+chest+gloves+shins together) and grants one
    passive bonus while equipped - swap sets any time by finding or buying a new one. */
-const BASE_MAX_HP = 5;
+const BASE_MAX_HP = 3;
 const ARMOR_SETS = {
   traveler:  { name:"Traveler's Garb",    short:"Traveler",
-    desc:"A dependable start. 5 max HP.",
+    desc:"A dependable start. 3 max HP.",
     helmet:"#c9a06a", chest:"#8a6a4a", chestTrim:"#6b4a34", glove:"#a67c52", shin:"#6b4a34",
     maxHpBonus:0 },
   shadowfen: { name:"Shadowfen Leathers", short:"Shadowfen",
-    desc:"+20% move speed. 6 max HP.",
+    desc:"+20% move speed. 4 max HP.",
     helmet:"#5c8443", chest:"#3f5c2c", chestTrim:"#2d4222", glove:"#5c8443", shin:"#2d4222",
     moveSpeedMult:1.2, maxHpBonus:1 },
   tidewoven: { name:"Tidewoven Scale",    short:"Tidewoven",
-    desc:"Regenerate 1 HP every 6 seconds. 7 max HP.",
+    desc:"Regenerate 1 HP every 6 seconds. 4 max HP.",
     helmet:"#3f7f96", chest:"#25495c", chestTrim:"#1c3b4a", glove:"#3f7f96", shin:"#1c3b4a",
-    regenRate:1/6, maxHpBonus:2 },
+    regenRate:1/6, maxHpBonus:1 },
   kingsbane: { name:"Kingsbane Regalia",  short:"Kingsbane",
-    desc:"+15% weapon damage. 8 max HP.",
+    desc:"+15% weapon damage. 5 max HP.",
     helmet:"#f5b942", chest:"#a558c9", chestTrim:"#7a3c9c", glove:"#f5b942", shin:"#7a3c9c",
-    dmgMult:1.15, maxHpBonus:3 },
+    dmgMult:1.15, maxHpBonus:2 },
   bramble:   { name:"Bramble Plate",      short:"Bramble Plate",
-    desc:"Take 20% less contact damage. 10 max HP.",
+    desc:"Take 20% less contact damage. 6 max HP.",
     helmet:"#6b5a78", chest:"#4a3b57", chestTrim:"#392c44", glove:"#6b5a78", shin:"#392c44",
-    dmgReduction:0.2, maxHpBonus:5 },
+    dmgReduction:0.2, maxHpBonus:3 },
+  aegis:     { name:"Aegis Bulwark",      short:"Aegis",
+    desc:"A shield takes half the damage from ranged attacks. 4 max HP.",
+    helmet:"#8a96a6", chest:"#5c6878", chestTrim:"#434c58", glove:"#8a96a6", shin:"#434c58",
+    hasShield:true, maxHpBonus:1 },
 };
 function getArmor(){ return ARMOR_SETS[player.armor] || ARMOR_SETS.traveler; }
 function recalcMaxHp(){
@@ -1079,7 +1136,7 @@ const CARDS = [
   {id:"heavy",     type:"weapon", name:"Heavy Blow",     desc:"+30% knockback",                   apply:p=>{ p.mods.knockbackMult*=1.3; }},
   {id:"momentum",  type:"weapon", name:"Battle Stride",  desc:"Move 25% faster while attacking",  apply:p=>{ p.mods.swingMoveMult*=1.25; }},
   {id:"twinfangs", type:"weapon", name:"Twin Fangs",     desc:"15% chance to strike twice",       apply:p=>{ p.mods.doubleHitChance+=0.15; }},
-  {id:"vitality",  type:"magic",  name:"Vitality",       desc:"+2 max HP, fully restored",        apply:p=>{ p.baseMaxHp+=2; recalcMaxHp(); p.hp=p.maxhp; }},
+  {id:"vitality",  type:"magic",  name:"Vitality",       desc:"+1 max HP, fully restored",        apply:p=>{ p.baseMaxHp+=1; recalcMaxHp(); p.hp=p.maxhp; }},
   {id:"swift",     type:"magic",  name:"Swift Boots",    desc:"+12% move speed",                  apply:p=>{ p.mods.moveSpeedMult*=1.12; }},
   {id:"magnet",    type:"magic",  name:"Magnet Charm",   desc:"+40% pickup radius",               apply:p=>{ p.pickupRadius*=1.4; }},
   {id:"vamp",      type:"magic",  name:"Vampiric Fang",  desc:"10% chance to heal 1 HP on hit",   apply:p=>{ p.mods.vampChance+=0.1; }},
@@ -1155,7 +1212,7 @@ const ANIMALS = {
   cat: { id:"cat", name:"Cat", furColor:"#b9b0c7", earSprite:"earCat", earBox:{w:2.1,h:3.0},
     perkDesc:"+10% double-hit chance", apply:p=>{ p.mods.doubleHitChance+=0.10; } },
   bear: { id:"bear", name:"Bear", furColor:"#8a5c3a", earSprite:"earBear", earBox:{w:2.1,h:2.4},
-    perkDesc:"+2 max HP", apply:p=>{ p.baseMaxHp+=2; } },
+    perkDesc:"+1 max HP", apply:p=>{ p.baseMaxHp+=1; } },
   raccoon: { id:"raccoon", name:"Raccoon", furColor:"#9a9aa2", earSprite:"earRaccoon", earBox:{w:2.1,h:3.0}, maskColor:"#3a2b3f",
     perkDesc:"+25% pickup radius", apply:p=>{ p.pickupRadius*=1.25; } },
 };
@@ -1196,6 +1253,10 @@ function weaponParts(type){
         {x:-3.6,y:1.9,w:1.5,h:1.5,sprite:spr("gauntlets"), group:"armL"},
         {x:2.2,y:1.9,w:1.5,h:1.5,sprite:spr("gauntlets"), group:"armR"},
       ];
+    case "greatsword":
+      return [{x:2.2,y:2.0,w:1.6,h:8.4,sprite:spr("greatsword"), group:"weapon"}];
+    case "nunchaku":
+      return [{x:2.4,y:2.2,w:1.1,h:5.6,sprite:spr("nunchaku"), group:"weapon"}];
     case "sword":
     default:
       return [{x:2.6,y:2.4,w:0.9,h:5.1,sprite:spr("sword"), group:"weapon"}];
@@ -1222,6 +1283,10 @@ function weaponSwingPose(style, p){
     }
     case "jab": // gauntlets: a quick double-fisted punch, both arms
       return { dx: bell*3, dy:0, rot:0, squash:bell*0.3 };
+    case "cleave": // greatsword: huge, heavy overhead-to-side cleave - like chop, but bigger
+      return { dx: bell*1.6, dy:-bell*0.6, rot: -1.4+p*2.7, squash:bell*1.3 };
+    case "whirl": // nunchaku: a fast full spin
+      return { dx: bell*1.0, dy:0, rot: p*Math.PI*2.4, squash:bell*0.5 };
     case "slash": // sword: quick arc
     default:
       return { dx: bell*2.2, dy:0, rot: -1.0+p*1.8, squash:bell*0.8 };
@@ -1252,6 +1317,12 @@ function playerParts(weaponType, armorKey, facingDir, animalId){
   ];
   parts.push(...armorParts(armorKey));
   parts.push(...weaponParts(weaponType));
+  // armor sets with hasShield (see ARMOR_SETS) carry a shield on the off-hand (armL) - the
+  // weapon always renders on armR's side, except gauntlets which punch with both fists
+  const armorSet = ARMOR_SETS[armorKey] || ARMOR_SETS.traveler;
+  if(armorSet.hasShield && weaponType!=="gauntlets"){
+    parts.push({x:-4.3,y:1.5,w:2.1,h:2.9,sprite:{grid:SPRITES.shield,palette:armorPalette(armorSet.chest)}, group:"armL"});
+  }
   return parts;
 }
 
@@ -1468,7 +1539,7 @@ const WALL=0, FLOOR=1, STAIRS=2;
 const VIEWW = 640, VIEWH = 416;
 const DASH_DURATION = 0.14, DASH_COOLDOWN = 1.4, DASH_DISTANCE = TILE*2;
 
-let state = "title"; // title | playing | paused | inventory | shop | levelup | bossclear | dead | win
+let state = "title"; // title | playing | paused | inventory | gearcompare | shop | levelup | bossclear | dead | win
 let floorNum = 1;
 let map, rooms, decor, torches;
 let player, enemies, items, particles, dmgNums, toastQueue;
@@ -1830,8 +1901,11 @@ function newPlayer(classId, animalId){
   p.hp = p.maxhp;
   return p;
 }
-function getEffectiveWeapon(){
-  const base = WEAPONS[player.weapon] || WEAPONS.sword;
+// computes what a given weapon's stats would be with the player's current mods/armor applied -
+// used both for the player's actual equipped weapon (getEffectiveWeapon) and, for the gear
+// comparison prompt, to preview what a weapon on the ground would look like if equipped
+function computeEffectiveWeapon(weaponKey){
+  const base = WEAPONS[weaponKey] || WEAPONS.sword;
   const m = player.mods;
   const armorDmgMult = getArmor().dmgMult || 1;
   const styleDmgMult = (m.styleDmgMult && m.styleDmgMult[base.style]) || 1;
@@ -1847,6 +1921,7 @@ function getEffectiveWeapon(){
     knockback: base.knockback * m.knockbackMult,
   };
 }
+function getEffectiveWeapon(){ return computeEffectiveWeapon(player.weapon); }
 
 /* ---------- particles / fx ---------- */
 function burst(x,y,color,n,opts){
@@ -1894,6 +1969,7 @@ window.addEventListener("keydown", e=>{
   } else if(e.key==="Escape"){
     if(state==="shop") document.getElementById("btnShopLeave").click();
     else if(state==="inventory") closeInventory();
+    else if(state==="gearcompare") closeGearCompare();
     else if(!document.getElementById("ov-upgrades").hidden) document.getElementById("btnUpgradesClose").click();
     else if(state==="paused") document.getElementById("btnHowtoGo").click();
   }
@@ -1926,6 +2002,7 @@ function goDead(){
   try{ localStorage.setItem("bramble_bestFloor", bestFloor); localStorage.setItem("bramble_bestGold", bestGold); }catch(e){}
   const earned = bankRun();
   clearSavedRun();
+  document.getElementById("deadAnimal").textContent = (ANIMALS[player.animalId]||ANIMALS.bunny).name.toLowerCase();
   document.getElementById("deadFloor").textContent = floorNum;
   document.getElementById("deadGold").textContent = player.gold;
   document.getElementById("deadShards").textContent = earned;
@@ -1933,6 +2010,7 @@ function goDead(){
   updateTouchControls();
 }
 function goWin(){
+  autoCollectItems();
   state = "win";
   Audio1.win();
   bestFloor = Math.max(bestFloor, TOTAL_FLOORS);
@@ -1940,6 +2018,7 @@ function goWin(){
   try{ localStorage.setItem("bramble_bestFloor", bestFloor); localStorage.setItem("bramble_bestGold", bestGold); }catch(e){}
   const earned = bankRun();
   clearSavedRun();
+  document.getElementById("winAnimal").textContent = (ANIMALS[player.animalId]||ANIMALS.bunny).name.toLowerCase();
   document.getElementById("winFloor").textContent = TOTAL_FLOORS;
   document.getElementById("winGold").textContent = player.gold;
   document.getElementById("winShards").textContent = earned;
@@ -1947,7 +2026,7 @@ function goWin(){
   updateTouchControls();
 }
 function showOverlay(id){
-  ["ov-title","ov-howto","ov-classselect","ov-shop","ov-levelup","ov-inventory","ov-bossclear","ov-upgrades","ov-dead","ov-win"].forEach(k=>{
+  ["ov-title","ov-howto","ov-classselect","ov-shop","ov-levelup","ov-inventory","ov-gearcompare","ov-bossclear","ov-upgrades","ov-dead","ov-win"].forEach(k=>{
     document.getElementById(k).hidden = (k!==id);
   });
   if(id){
@@ -2014,7 +2093,16 @@ function buildClassSelect(){
 }
 
 /* ---------- boss checkpoint: continue deeper, or bank shards and quit ---------- */
+// sweeps up anything left on the floor (gold, potions, stray weapons/armor) so a boss
+// fight fought across a big room doesn't leave loot behind the player never goes back for
+function autoCollectItems(){
+  if(!items || !items.length) return;
+  const toCollect = items.slice();
+  items.length = 0;
+  toCollect.forEach(it=>pickup(it));
+}
 function showBossClear(){
+  autoCollectItems();
   state = "bossclear";
   document.getElementById("bossClearTitle").textContent = `${BOSSES[biome.bossKind].name} Defeated!`;
   const previewBonus = (player.bossesDefeatedThisRun||0)*10;
@@ -2128,7 +2216,7 @@ function currentOverlayId(){
   return null;
 }
 function openHowto(){
-  if(state==="paused" || state==="shop" || state==="levelup" || state==="bossclear" || state==="inventory") return; // an overlay is already active - ignore
+  if(state==="paused" || state==="shop" || state==="levelup" || state==="bossclear" || state==="inventory" || state==="gearcompare") return; // an overlay is already active - ignore
   if(!document.getElementById("ov-upgrades").hidden) return; // skill trees open - ignore
   if(!document.getElementById("ov-classselect").hidden) return; // class select open - ignore
   if(state==="playing"){
@@ -2146,14 +2234,14 @@ function openHowto(){
 function shopItemLabel(offer){
   if(offer.kind==="weapon") return WEAPONS[offer.weapon].name;
   if(offer.kind==="armor") return ARMOR_SETS[offer.armor].name;
-  if(offer.kind==="potion") return "Wildberry Potion (+5 HP)";
+  if(offer.kind==="potion") return "Wildberry Potion (+3 HP)";
   if(offer.kind==="heal") return "Full Heal";
   return "";
 }
 function shopItemDesc(offer){
   if(offer.kind==="weapon") return WEAPONS[offer.weapon].desc || "";
   if(offer.kind==="armor") return ARMOR_SETS[offer.armor].desc || "";
-  if(offer.kind==="potion") return "Restores 5 HP on the spot.";
+  if(offer.kind==="potion") return "Restores 3 HP on the spot.";
   if(offer.kind==="heal") return "Fully restores your health.";
   return "";
 }
@@ -2201,8 +2289,8 @@ function buyOffer(idx){
     recalcMaxHp();
     toast(`Equipped the ${ARMOR_SETS[offer.armor].name}!`);
   } else if(offer.kind==="potion"){
-    player.hp = Math.min(player.maxhp, player.hp+5);
-    toast("Quaffed a potion! +5 HP");
+    player.hp = Math.min(player.maxhp, player.hp+3);
+    toast("Quaffed a potion! +3 HP");
   } else if(offer.kind==="heal"){
     player.hp = player.maxhp;
     toast("Fully healed!");
@@ -2268,6 +2356,7 @@ function buildInventoryOverlay(){
       invStatRow("Attack CD", wpn.cooldown.toFixed(2)+"s") +
       invStatRow("Range", Math.round(wpn.range)) +
       invStatRow("Dmg Reduction", reductionPct+"%") +
+      invStatRow("Ranged Block", armor.hasShield?"50%":"0%") +
       invStatRow("Gold Bonus", (goldPct>0?"+":"")+goldPct+"%") +
       invStatRow("Pickup Radius", Math.round(player.pickupRadius)) +
     `</div>`;
@@ -2318,6 +2407,75 @@ function buildInventoryOverlay(){
 }
 document.getElementById("inv").addEventListener("click", openInventory);
 document.getElementById("btnInventoryClose").addEventListener("click", closeInventory);
+
+/* ---------- gear comparison prompt (walking over a weapon/armor on the ground) ----------
+   weaponPickup/armorPickup items no longer auto-equip on contact - instead they pause the
+   game and show a side-by-side comparison against what's currently worn, so a swap is a
+   choice rather than an accident. The item stays on the floor (re-armed once the player
+   walks away, see the "armed" hysteresis in update()) if the player declines. */
+let pendingGearItem = null;
+function fmtNum(n){ return (Math.round(n*10)/10).toString(); }
+function compareStatRow(label, curVal, newVal, curRaw, newRaw){
+  let cls = "";
+  if(newRaw > curRaw) cls = "better";
+  else if(newRaw < curRaw) cls = "worse";
+  return `<div class="compare-row"><span class="compare-label">${label}</span><span class="compare-val">${curVal}</span><span class="compare-val ${cls}">${newVal}</span></div>`;
+}
+function openGearCompare(it){
+  pendingGearItem = it;
+  state = "gearcompare";
+  buildGearCompareOverlay(it);
+  showOverlay("ov-gearcompare");
+  updateTouchControls();
+}
+function closeGearCompare(){
+  pendingGearItem = null;
+  state = "playing";
+  showOverlay(null);
+  updateTouchControls();
+}
+function buildGearCompareOverlay(it){
+  const wrap = document.getElementById("compareWrap");
+  const title = document.getElementById("gearCompareTitle");
+  let html = "";
+  if(it.type==="weaponPickup"){
+    const curKey = player.weapon, newKey = it.weapon;
+    const cur = computeEffectiveWeapon(curKey), neu = computeEffectiveWeapon(newKey);
+    title.textContent = `Found: ${WEAPONS[newKey].name}`;
+    html += `<div class="compare-desc">${WEAPONS[newKey].desc||""}</div>`;
+    html += `<div class="compare-head-row"><span></span><span>${WEAPONS[curKey].short}</span><span>${WEAPONS[newKey].short}</span></div>`;
+    html += compareStatRow("Damage", fmtNum(cur.dmg), fmtNum(neu.dmg), cur.dmg, neu.dmg);
+    html += compareStatRow("Range", Math.round(cur.range), Math.round(neu.range), cur.range, neu.range);
+    html += compareStatRow("Attack Speed", (1/cur.cooldown).toFixed(1)+"/s", (1/neu.cooldown).toFixed(1)+"/s", 1/cur.cooldown, 1/neu.cooldown);
+    html += compareStatRow("Knockback", Math.round(cur.knockback), Math.round(neu.knockback), cur.knockback, neu.knockback);
+  } else if(it.type==="armorPickup"){
+    const curKey = player.armor, newKey = it.armor;
+    const curSet = ARMOR_SETS[curKey], newSet = ARMOR_SETS[newKey];
+    title.textContent = `Found: ${newSet.name}`;
+    html += `<div class="compare-desc">${newSet.desc||""}</div>`;
+    html += `<div class="compare-head-row"><span></span><span>${curSet.short}</span><span>${newSet.short}</span></div>`;
+    const curHp = player.baseMaxHp+(curSet.maxHpBonus||0), newHp = player.baseMaxHp+(newSet.maxHpBonus||0);
+    html += compareStatRow("Max HP", curHp, newHp, curHp, newHp);
+    const curSpd = Math.round((curSet.moveSpeedMult||1)*100), newSpd = Math.round((newSet.moveSpeedMult||1)*100);
+    html += compareStatRow("Move Speed", curSpd+"%", newSpd+"%", curSpd, newSpd);
+    const curDmg = Math.round((curSet.dmgMult||1)*100), newDmg = Math.round((newSet.dmgMult||1)*100);
+    html += compareStatRow("Weapon DMG", curDmg+"%", newDmg+"%", curDmg, newDmg);
+    const curRegen = curSet.regenRate||0, newRegen = newSet.regenRate||0;
+    html += compareStatRow("Regen", curRegen>0?curRegen.toFixed(2)+"/s":"—", newRegen>0?newRegen.toFixed(2)+"/s":"—", curRegen, newRegen);
+    html += compareStatRow("Contact Reduction", Math.round((curSet.dmgReduction||0)*100)+"%", Math.round((newSet.dmgReduction||0)*100)+"%", curSet.dmgReduction||0, newSet.dmgReduction||0);
+    html += compareStatRow("Ranged Block", curSet.hasShield?"50%":"0%", newSet.hasShield?"50%":"0%", curSet.hasShield?1:0, newSet.hasShield?1:0);
+  }
+  wrap.innerHTML = html;
+}
+document.getElementById("btnGearEquip").addEventListener("click", ()=>{
+  if(!pendingGearItem) return;
+  const it = pendingGearItem;
+  const idx = items.indexOf(it);
+  if(idx>=0) items.splice(idx,1);
+  pickup(it);
+  closeGearCompare();
+});
+document.getElementById("btnGearLeave").addEventListener("click", closeGearCompare);
 
 /* ---------- leveling / ability cards ---------- */
 let pendingLevelUps = 0;
@@ -2626,7 +2784,20 @@ function update(dt){
   items = items.filter(it=>Number.isFinite(it.x) && Number.isFinite(it.y));
   for(let i=items.length-1;i>=0;i--){
     const it = items[i];
-    if(dist2(it.x,it.y,player.x,player.y) < (player.pickupRadius*player.pickupRadius)){
+    const d2it = dist2(it.x,it.y,player.x,player.y);
+    if(it.type==="weaponPickup" || it.type==="armorPickup"){
+      // gear compares instead of auto-equipping (see openGearCompare) - "armed" hysteresis
+      // (same pattern as the merchant trigger) so declining doesn't instantly re-prompt
+      if(it.armed==null) it.armed = true;
+      const farR = player.pickupRadius+26;
+      if(!it.armed && d2it > farR*farR) it.armed = true;
+      if(it.armed && !pendingGearItem && d2it < player.pickupRadius*player.pickupRadius){
+        it.armed = false;
+        openGearCompare(it);
+      }
+      continue;
+    }
+    if(d2it < (player.pickupRadius*player.pickupRadius)){
       pickup(it);
       items.splice(i,1);
     }
@@ -2863,10 +3034,13 @@ function updateWisp(en, dt, d2){
 }
 
 // shared player-damage path used by both contact hits and enemy projectiles - applies
-// armor/mod reduction, invuln window, knockback and the usual hit feedback (text/burst/shake/sfx)
-function damagePlayer(sourceX, sourceY, rawDmg, knockback){
+// armor/mod reduction, invuln window, knockback and the usual hit feedback (text/burst/shake/sfx).
+// isRanged is only set for actual enemy projectile hits, so a shield (getArmor().hasShield)
+// halves damage from those specifically without touching melee/contact damage.
+function damagePlayer(sourceX, sourceY, rawDmg, knockback, isRanged){
   const totalReduction = Math.min(0.75, player.mods.dmgReduction + (getArmor().dmgReduction||0));
-  const dmg = Math.max(1, Math.round(rawDmg*(1-totalReduction)));
+  let dmg = Math.max(1, Math.round(rawDmg*(1-totalReduction)));
+  if(isRanged && getArmor().hasShield) dmg = Math.max(1, Math.round(dmg*0.5));
   player.hp -= dmg;
   player.hurtTimer = 0.35; player.invuln = 0.9;
   const ang = Math.atan2(player.y-sourceY, player.x-sourceX);
@@ -3034,7 +3208,7 @@ function updateProjectiles(dt){
     if(!dead && p.from==="enemy"){
       const rr = p.radius+player.radius;
       if(player.invuln<=0 && dist2(p.x,p.y,player.x,player.y) < rr*rr){
-        damagePlayer(p.x, p.y, p.dmg, p.knockback);
+        damagePlayer(p.x, p.y, p.dmg, p.knockback, true);
         dead = true;
       }
     } else if(!dead){
@@ -3081,8 +3255,8 @@ function renderProjectiles(){
 
 function pickup(it){
   if(it.type==="potion"){
-    player.hp = Math.min(player.maxhp, player.hp+3);
-    toast("Found a wildberry potion! +3 HP");
+    player.hp = Math.min(player.maxhp, player.hp+2);
+    toast("Found a wildberry potion! +2 HP");
     Audio1.pickup();
     burst(it.x,it.y-10, COL.moss, 10, {maxSp:80,up:40});
   } else if(it.type==="gold"){
@@ -3097,9 +3271,10 @@ function pickup(it){
     Audio1.upgrade();
     burst(it.x,it.y-10, "#fff", 16, {maxSp:120,up:60});
     shake(4,0.2);
-    // leave the old weapon behind so the player can swap back later
+    // leave the old weapon behind so the player can swap back later - armed:false so it
+    // doesn't immediately re-open a compare prompt while the player is still standing on it
     if(oldWeapon !== it.weapon){
-      items.push({type:"weaponPickup", weapon:oldWeapon, x:it.x, y:it.y, t:0});
+      items.push({type:"weaponPickup", weapon:oldWeapon, x:it.x, y:it.y, t:0, armed:false});
     }
   } else if(it.type==="gem"){
     Audio1.xp();
@@ -3359,6 +3534,13 @@ function drawWeaponIcon(ctx, type){
   } else if(type==="gauntlets"){
     ctx.fillStyle="#cfae4a"; fillSoftRect(ctx,-11,-8,9,9); fillSoftRect(ctx,2,-8,9,9);
     ctx.fillStyle="#8a6a1a"; fillSoftRect(ctx,-11,-8,9,2.5); fillSoftRect(ctx,2,-8,9,2.5);
+  } else if(type==="greatsword"){
+    ctx.fillStyle=COL.metal; fillSoftRect(ctx,-3,-20,6,24);
+    ctx.fillStyle=COL.metalDark; fillSoftRect(ctx,-8,2,16,4);
+  } else if(type==="nunchaku"){
+    ctx.fillStyle="#5a3d28"; fillSoftRect(ctx,-9,-10,6,14);
+    ctx.fillStyle="#5a3d28"; fillSoftRect(ctx,3,-10,6,14);
+    ctx.fillStyle="#2a2a2a"; fillSoftRect(ctx,-3,-4,6,4);
   } else {
     ctx.fillStyle=COL.metal; fillSoftRect(ctx,-2,-18,4,20);
     ctx.fillStyle=COL.metalDark; fillSoftRect(ctx,-6,0,12,4);
