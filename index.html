@@ -408,35 +408,51 @@
   }
 
   .skilltree-scroll{
-    width:100%; max-width:420px;
-    max-height:200px; overflow-y:auto;
-    display:flex; flex-direction:column; gap:10px;
+    width:100%; max-width:560px;
+    max-height:320px; overflow-y:auto;
     margin:4px 0; padding-right:4px;
   }
-  .tree-section{ display:flex; flex-direction:column; gap:6px; text-align:left; }
-  .tree-title{
-    font-family:"Silkscreen",monospace; font-size:11px; letter-spacing:.05em;
-    text-transform:uppercase; padding-left:2px;
+  .skilltree-columns{ display:flex; gap:8px; align-items:flex-start; }
+  .tree-column{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; }
+  .tree-header-icon{
+    width:44px; height:44px; border-radius:50%; flex:none;
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; margin-bottom:4px;
+    background:radial-gradient(circle at 35% 30%, rgba(255,255,255,.35), rgba(0,0,0,.12) 70%);
+    border:2px solid var(--tc);
+    filter:drop-shadow(0 0 6px var(--tc));
   }
-  .tree-node{
-    display:flex; align-items:center; gap:10px;
+  .tree-hex-chain{ display:flex; flex-direction:column; align-items:center; }
+  .tree-hex{
+    width:36px; height:32px; flex:none;
+    clip-path:polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+    display:flex; align-items:center; justify-content:center;
+    font-size:15px; background:var(--tc);
+    filter:drop-shadow(0 0 4px var(--tc)); opacity:.45;
+  }
+  .tree-hex.leveled{ opacity:.85; }
+  .tree-hex.maxed{ opacity:1; filter:drop-shadow(0 0 7px var(--tc)); }
+  .tree-connector{ width:3px; height:10px; background:var(--tc); opacity:.5; }
+  .tree-node-list{ width:100%; display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+  .tree-node-compact{
+    text-align:center;
     background:rgba(246,236,217,.08);
     border:1px solid rgba(246,236,217,.16);
-    border-radius:10px; padding:7px 10px;
+    border-radius:9px; padding:6px 5px;
+    display:flex; flex-direction:column; align-items:center; gap:2px;
   }
-  .tree-node-info{ flex:1; min-width:0; }
-  .tree-node-name{ font-size:12px; font-weight:700; color:var(--parchment); }
-  .tree-node-lvl{ font-family:"Silkscreen",monospace; font-size:9px; color:var(--lavender); }
-  .tree-node-desc{ font-size:10.5px; color:var(--lavender); line-height:1.3; margin-top:1px; }
-  .tree-buy{
-    font-family:"Silkscreen",monospace; font-weight:700; font-size:11px;
-    background:var(--amber); color:var(--ink); border:none; border-radius:8px;
-    padding:6px 10px; cursor:pointer; flex:none;
+  .tree-node-name{ font-size:10px; font-weight:700; color:var(--parchment); line-height:1.25; }
+  .tree-node-lvl{ font-family:"Silkscreen",monospace; font-size:8px; color:var(--lavender); display:block; }
+  .tree-node-desc{ font-size:9px; color:var(--lavender); line-height:1.25; }
+  .tree-buy-mini{
+    font-family:"Silkscreen",monospace; font-weight:700; font-size:9.5px;
+    background:var(--amber); color:var(--ink); border:none; border-radius:7px;
+    padding:4px 8px; cursor:pointer; margin-top:2px;
     box-shadow:0 2px 0 #c9860f;
   }
-  .tree-buy:disabled{ background:#8a7a68; color:#e2d8c6; box-shadow:none; cursor:default; opacity:.75; }
-  .tree-buy:active:not(:disabled){ transform:translateY(2px); box-shadow:none; }
-  .tree-buy:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
+  .tree-buy-mini:disabled{ background:#8a7a68; color:#e2d8c6; box-shadow:none; cursor:default; opacity:.75; }
+  .tree-buy-mini:active:not(:disabled){ transform:translateY(2px); box-shadow:none; }
+  .tree-buy-mini:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
 
   .inv-tabs{
     display:flex; gap:6px;
@@ -2166,20 +2182,20 @@ function continueRun(){
 }
 
 const SKILL_TREES = {
-  damage: { name:"Damage", color:"var(--coral)", nodes:[
-    { id:"edge", name:"Bramble Edge", desc:"+1 starting weapon damage", maxLevel:3, cost:l=>20+l*25 },
-    { id:"fury", name:"Fury", desc:"-5% attack cooldown", maxLevel:3, cost:l=>20+l*25 },
-    { id:"momentum", name:"Momentum", desc:"+10% knockback", maxLevel:2, cost:l=>25+l*30 },
+  damage: { name:"Damage", color:"var(--coral)", icon:"⚔", nodes:[
+    { id:"edge", name:"Bramble Edge", desc:"+1 starting weapon damage", maxLevel:3, cost:l=>20+l*25, icon:"🗡" },
+    { id:"fury", name:"Fury", desc:"-5% attack cooldown", maxLevel:3, cost:l=>20+l*25, icon:"⚡" },
+    { id:"momentum", name:"Momentum", desc:"+10% knockback", maxLevel:2, cost:l=>25+l*30, icon:"💥" },
   ]},
-  survival: { name:"Survival", color:"var(--moss)", nodes:[
-    { id:"hide", name:"Thick Hide", desc:"+1 starting max HP", maxLevel:5, cost:l=>15+l*20 },
-    { id:"secondchance", name:"Second Chance", desc:"+1 starting Second Wind charge", maxLevel:2, cost:l=>40+l*40 },
-    { id:"recovery", name:"Quick Recovery", desc:"+regeneration over time", maxLevel:3, cost:l=>25+l*25 },
+  survival: { name:"Survival", color:"var(--moss)", icon:"🛡", nodes:[
+    { id:"hide", name:"Thick Hide", desc:"+1 starting max HP", maxLevel:5, cost:l=>15+l*20, icon:"❤" },
+    { id:"secondchance", name:"Second Chance", desc:"+1 starting Second Wind charge", maxLevel:2, cost:l=>40+l*40, icon:"✨" },
+    { id:"recovery", name:"Quick Recovery", desc:"+regeneration over time", maxLevel:3, cost:l=>25+l*25, icon:"💚" },
   ]},
-  utility: { name:"Utility", color:"var(--lavender)", nodes:[
-    { id:"treasure", name:"Treasure Hunter", desc:"+10% gold gained", maxLevel:3, cost:l=>20+l*20 },
-    { id:"magnetism", name:"Magnetism", desc:"+15% pickup radius", maxLevel:3, cost:l=>20+l*20 },
-    { id:"headstart", name:"Head Start", desc:"+5 starting gold", maxLevel:3, cost:l=>15+l*15 },
+  utility: { name:"Utility", color:"var(--lavender)", icon:"⚙", nodes:[
+    { id:"treasure", name:"Treasure Hunter", desc:"+10% gold gained", maxLevel:3, cost:l=>20+l*20, icon:"💰" },
+    { id:"magnetism", name:"Magnetism", desc:"+15% pickup radius", maxLevel:3, cost:l=>20+l*20, icon:"🧲" },
+    { id:"headstart", name:"Head Start", desc:"+5 starting gold", maxLevel:3, cost:l=>15+l*15, icon:"🪙" },
   ]},
 };
 
@@ -2681,36 +2697,63 @@ function buildUpgradesOverlay(){
   document.getElementById("shardsVal").textContent = meta.shards;
   const container = document.getElementById("skillTrees");
   container.innerHTML = "";
+  const columns = document.createElement("div");
+  columns.className = "skilltree-columns";
   Object.entries(SKILL_TREES).forEach(([key, tree])=>{
-    const section = document.createElement("div");
-    section.className = "tree-section";
-    const heading = document.createElement("div");
-    heading.className = "tree-title";
-    heading.style.color = tree.color;
-    heading.textContent = T(tree.name);
-    section.appendChild(heading);
+    const col = document.createElement("div");
+    col.className = "tree-column";
+    col.style.setProperty("--tc", tree.color);
+
+    const headerIcon = document.createElement("div");
+    headerIcon.className = "tree-header-icon";
+    headerIcon.textContent = tree.icon;
+    headerIcon.title = T(tree.name);
+    col.appendChild(headerIcon);
+
+    // a chain of hex badges (one per node, in order) linked by short connector lines -
+    // purely a visual "tech tree" read of the column; the actual name/level/cost/buy
+    // controls for each node live in the compact list right below it
+    const chain = document.createElement("div");
+    chain.className = "tree-hex-chain";
+    tree.nodes.forEach((node, i)=>{
+      if(i>0){
+        const connector = document.createElement("div");
+        connector.className = "tree-connector";
+        chain.appendChild(connector);
+      }
+      const lvl = skillLevel(node.id);
+      const hex = document.createElement("div");
+      hex.className = "tree-hex" + (lvl>=node.maxLevel ? " maxed" : lvl>0 ? " leveled" : "");
+      hex.textContent = node.icon;
+      chain.appendChild(hex);
+    });
+    col.appendChild(chain);
+
+    const list = document.createElement("div");
+    list.className = "tree-node-list";
     tree.nodes.forEach(node=>{
       const lvl = skillLevel(node.id);
       const maxed = lvl>=node.maxLevel;
       const cost = maxed ? null : node.cost(lvl);
       const afford = !maxed && meta.shards>=cost;
       const row = document.createElement("div");
-      row.className = "tree-node";
+      row.className = "tree-node-compact";
       row.innerHTML =
-        `<div class="tree-node-info">` +
-          `<div class="tree-node-name">${T(node.name)} <span class="tree-node-lvl">${lvl}/${node.maxLevel}</span></div>` +
-          `<div class="tree-node-desc">${T(node.desc)}</div>` +
-        `</div>`;
+        `<div class="tree-node-name">${T(node.name)} <span class="tree-node-lvl">${lvl}/${node.maxLevel}</span></div>` +
+        `<div class="tree-node-desc">${T(node.desc)}</div>`;
       const btn = document.createElement("button");
-      btn.className = "tree-buy";
+      btn.className = "tree-buy-mini";
       btn.textContent = maxed ? T("MAX") : cost+" ◆";
       btn.disabled = maxed || !afford;
       btn.addEventListener("click", ()=>buySkill(node.id));
       row.appendChild(btn);
-      section.appendChild(row);
+      list.appendChild(row);
     });
-    container.appendChild(section);
+    col.appendChild(list);
+
+    columns.appendChild(col);
   });
+  container.appendChild(columns);
 }
 function buySkill(nodeId){
   let node = null;
