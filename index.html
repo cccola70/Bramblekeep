@@ -926,17 +926,17 @@ const BIOMES = [
   { key:"dungeon", range:[1,5],   name:"Bramblekeep",       bossKind:"boss",
     wall:"#8a5a3a", wallFace:"#a8734a", wallTop:"#d9ab68",
     floorA:"#dcb37c", floorB:"#cc9e6a", stairsBg:"#6b4527",
-    decorTypes:["bone","crack","moss"], ambient:"torch",
+    decorTypes:["bone","crack","moss","rubble","shrub"], ambient:"torch",
     slimeHues:[COL.slime,"#7bc8d6","#e8a6d0","#c9d67b"] },
   { key:"forest", range:[6,10],   name:"Shadowfen Forest",  bossKind:"treant",
     wall:"#4a7a3a", wallFace:"#5c9448", wallTop:"#96d968",
     floorA:"#82b25c", floorB:"#71a24e", stairsBg:"#3a5c28",
-    decorTypes:["stump","fern","mushroom"], ambient:"firefly",
+    decorTypes:["stump","fern","mushroom","shrub","rubble"], ambient:"firefly",
     slimeHues:["#6b8f4e","#8fae55","#4d6b37","#a3c96b"] },
   { key:"water", range:[11,15],   name:"The Sunken Shoals", bossKind:"kraken",
     wall:"#2a8fa8", wallFace:"#3aa8c2", wallTop:"#7fdcec",
     floorA:"#55cfdf", floorB:"#41bacb", stairsBg:"#1c6b7a",
-    decorTypes:["shell","kelp","driftwood"], ambient:"glow",
+    decorTypes:["shell","kelp","driftwood","rubble"], ambient:"glow",
     slimeHues:["#3a7ea8","#4fa8c9","#2a5f7a","#6bc9d6"] },
 ];
 function getBiome(floor){
@@ -1540,7 +1540,8 @@ function genMap(){
       torches.push({x:(r.x+0.5)*TILE, y:(r.y+0.5)*TILE});
       torches.push({x:(r.x+r.w-0.5)*TILE, y:(r.y+0.5)*TILE});
     }
-    if(Math.random()<0.5){
+    const decorCount = randi(0,2);
+    for(let i=0;i<decorCount;i++){
       decor.push({x:rand(r.x+0.6,r.x+r.w-0.6)*TILE, y:rand(r.y+0.6,r.y+r.h-0.6)*TILE, type:choice(biome.decorTypes)});
     }
   }
@@ -2740,17 +2741,19 @@ function render(){
   ctx.translate(-camX+sx, -camY+sy);
   renderTiles();
   renderDecor();
-  const drawList = [...items.map(it=>({it})), ...enemies.map(e=>({e})), {p:player}];
+  const visibleTorches = torches.filter(t=>t.x>=camX-60 && t.x<=camX+VIEWW+60 && t.y>=camY-60 && t.y<=camY+VIEWH+60);
+  const drawList = [...items.map(it=>({it})), ...enemies.map(e=>({e})), ...visibleTorches.map(tc=>({tc})), {p:player}];
   if(merchant) drawList.push({m:merchant});
   drawList.sort((a,b)=>{
-    const ay = a.it? a.it.y : a.e? a.e.y : a.m? a.m.y : a.p.y;
-    const by = b.it? b.it.y : b.e? b.e.y : b.m? b.m.y : b.p.y;
+    const ay = a.it? a.it.y : a.e? a.e.y : a.m? a.m.y : a.tc? a.tc.y : a.p.y;
+    const by = b.it? b.it.y : b.e? b.e.y : b.m? b.m.y : b.tc? b.tc.y : b.p.y;
     return ay-by;
   });
   for(const d of drawList){
     if(d.it) renderItem(d.it);
     else if(d.e) drawCreature(ctx, d.e.type, d.e, 0, 0);
     else if(d.m) drawCreature(ctx, "merchant", d.m, 0, 0);
+    else if(d.tc) renderTorchFixture(d.tc);
     else if(d.p) drawCreature(ctx, "player", d.p, 0, 0);
   }
   renderTorchGlow();
@@ -2818,12 +2821,46 @@ function renderDecor(){
     else if(d.type==="shell"){ ctx.fillStyle="#d8c9b0"; ctx.beginPath(); ctx.arc(d.x,d.y,5,Math.PI,0); ctx.fill(); ctx.fillStyle="#c2ac8a"; ctx.fillRect(d.x-1,d.y-5,2,5); }
     else if(d.type==="kelp"){ ctx.fillStyle="#2f6b4a"; ctx.fillRect(d.x-1,d.y-11,2,11); ctx.fillRect(d.x-5,d.y-8,4,2); ctx.fillRect(d.x+1,d.y-5,4,2); }
     else if(d.type==="driftwood"){ ctx.fillStyle="#5a4a3a"; ctx.fillRect(d.x-8,d.y-2,16,3); ctx.fillStyle="#6f5c48"; ctx.fillRect(d.x-6,d.y-5,3,3); }
+    else if(d.type==="shrub"){
+      ctx.fillStyle="#3f6b2c"; ctx.beginPath(); ctx.ellipse(d.x,d.y-2,7,5,0,0,7); ctx.fill();
+      ctx.fillStyle="#5c9448"; ctx.beginPath(); ctx.ellipse(d.x-3,d.y-5,5,4,0,0,7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(d.x+3,d.y-5,5,4,0,0,7); ctx.fill();
+      ctx.fillStyle="#82b25c"; ctx.beginPath(); ctx.ellipse(d.x,d.y-7,4,3,0,0,7); ctx.fill();
+    }
+    else if(d.type==="rubble"){
+      ctx.fillStyle="#6b4527"; ctx.fillRect(d.x-6,d.y-3,5,4); ctx.fillRect(d.x+1,d.y-2,6,3); ctx.fillRect(d.x-2,d.y-5,4,3);
+      ctx.fillStyle="#8a5a3a"; ctx.fillRect(d.x-5,d.y-4,3,2); ctx.fillRect(d.x+2,d.y-3,3,2); ctx.fillRect(d.x-1,d.y-6,2,2);
+    }
   }
 }
+// the physical wall-mounted fixture (pole + flame/firefly/glow-orb) - drawn as part of the
+// y-sorted drawList so it can be occluded by (or occlude) the player and enemies correctly,
+// instead of always sitting on top of everything like the ambient light glow does
+function renderTorchFixture(t){
+  const now = performance.now();
+  if(biome.ambient==="torch"){
+    ctx.fillStyle="#3a2a22";
+    ctx.fillRect(t.x-2,t.y-14,4,16);
+    ctx.fillStyle=`hsl(${30+Math.sin(now/80+t.x)*8},90%,60%)`;
+    ctx.fillRect(t.x-3,t.y-20,6,7);
+  } else if(biome.ambient==="firefly"){
+    ctx.fillStyle="#3d2f1a";
+    ctx.fillRect(t.x-2,t.y-10,4,12);
+    ctx.fillStyle=`hsl(${110+Math.sin(now/90+t.x)*10},70%,60%)`;
+    ctx.beginPath(); ctx.ellipse(t.x,t.y-12,6,4,0,0,7); ctx.fill();
+  } else {
+    ctx.fillStyle="#16303c";
+    ctx.fillRect(t.x-2,t.y-12,4,14);
+    ctx.fillStyle=`hsl(${190+Math.sin(now/100+t.x)*10},80%,60%)`;
+    ctx.beginPath(); ctx.arc(t.x,t.y-16,5,0,7); ctx.fill();
+  }
+}
+// ambient light pool only - a soft translucent glow is fine layered on top of everything,
+// unlike the solid fixture above which needs proper depth sorting
 function renderTorchGlow(){
   const now = performance.now();
   for(const t of torches){
-    if(t.x<camX-60||t.x>camX+VIEWW+60||t.y<camY-60||t.y>camY+VIEWH+60) continue;
+    if(t.x<camX-70||t.x>camX+VIEWW+70||t.y<camY-70||t.y>camY+VIEWH+70) continue;
     const flick = 0.75+Math.sin(now/120 + t.x)*0.06;
     let glowRGB = "255,170,90";
     if(biome.ambient==="firefly") glowRGB = "150,220,120";
@@ -2833,22 +2870,6 @@ function renderTorchGlow(){
     grd.addColorStop(1,`rgba(${glowRGB},0)`);
     ctx.fillStyle=grd;
     ctx.fillRect(t.x-70,t.y-70,140,140);
-    if(biome.ambient==="torch"){
-      ctx.fillStyle="#3a2a22";
-      ctx.fillRect(t.x-2,t.y-14,4,16);
-      ctx.fillStyle=`hsl(${30+Math.sin(now/80+t.x)*8},90%,60%)`;
-      ctx.fillRect(t.x-3,t.y-20,6,7);
-    } else if(biome.ambient==="firefly"){
-      ctx.fillStyle="#3d2f1a";
-      ctx.fillRect(t.x-2,t.y-10,4,12);
-      ctx.fillStyle=`hsl(${110+Math.sin(now/90+t.x)*10},70%,60%)`;
-      ctx.beginPath(); ctx.ellipse(t.x,t.y-12,6,4,0,0,7); ctx.fill();
-    } else {
-      ctx.fillStyle="#16303c";
-      ctx.fillRect(t.x-2,t.y-12,4,14);
-      ctx.fillStyle=`hsl(${190+Math.sin(now/100+t.x)*10},80%,60%)`;
-      ctx.beginPath(); ctx.arc(t.x,t.y-16,5,0,7); ctx.fill();
-    }
   }
 }
 function renderItem(it){
