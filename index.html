@@ -243,6 +243,7 @@
   }
   .shop-buy:active:not(:disabled){ transform:translateY(2px); box-shadow:0 1px 0 var(--coral-dark); }
   .shop-buy:disabled{ background:#8a7a68; color:#e2d8c6; box-shadow:none; cursor:default; opacity:.75; }
+  .shop-buy:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
 
   .shop-icon-spear{ width:6px; height:28px; background:#c9a86e; border-radius:2px; }
   .shop-icon-spear::after{ content:""; position:absolute; top:2px; left:-2px; width:10px; height:8px; background:#e8eef2; border-radius:2px; }
@@ -261,6 +262,8 @@
     width:100%; max-width:420px; margin:4px 0;
   }
   .card{
+    font:inherit; text-align:left; color:inherit;
+    -webkit-appearance:none; appearance:none;
     flex:1 1 112px; max-width:132px;
     background:rgba(246,236,217,.08);
     border:1px solid rgba(246,236,217,.2);
@@ -272,8 +275,9 @@
   }
   .card:hover{ background:rgba(246,236,217,.16); transform:translateY(-2px); }
   .card:active{ transform:translateY(0); }
+  .card:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
+  .card-top{ display:flex; align-items:center; justify-content:space-between; width:100%; }
   .card-badge{
-    align-self:flex-start;
     font-family:"Silkscreen",monospace; font-size:8px; letter-spacing:.05em;
     padding:2px 6px; border-radius:5px;
   }
@@ -281,6 +285,7 @@
   .card-magic .card-badge{ background:rgba(185,166,217,.3); color:var(--lavender); }
   .card-name{ font-size:12.5px; font-weight:800; color:var(--parchment); }
   .card-desc{ font-size:11px; color:var(--lavender); line-height:1.35; }
+  .num-badge{ flex:none; }
 
   .secondarybtn{
     font-family:"Baloo 2",sans-serif; font-weight:700; font-size:12px;
@@ -290,6 +295,7 @@
   }
   .secondarybtn:hover:not(:disabled){ background:rgba(246,236,217,.1); }
   .secondarybtn:disabled{ opacity:.5; cursor:default; }
+  .secondarybtn:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
 
   .shards-line{
     font-family:"Silkscreen",monospace; font-size:12px; color:var(--amber);
@@ -325,6 +331,7 @@
   }
   .tree-buy:disabled{ background:#8a7a68; color:#e2d8c6; box-shadow:none; cursor:default; opacity:.75; }
   .tree-buy:active:not(:disabled){ transform:translateY(2px); box-shadow:none; }
+  .tree-buy:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
 
   .xpbar-wrap{
     position:relative;
@@ -414,6 +421,7 @@
     border-radius:8px;
   }
   #mute:hover, #help:hover{ color:var(--ink); background:rgba(0,0,0,.06); }
+  #mute:focus-visible, #help:focus-visible{ outline:3px solid var(--coral-dark); outline-offset:1px; }
   #help{ font-family:"Silkscreen", monospace; font-weight:700; font-size:12px; }
 
   #debugbox{
@@ -495,6 +503,10 @@
         <div class="howto-row">
           <div class="howto-icon"><div class="shop-icon-armor" style="background:var(--coral);"></div></div>
           <p>Find or buy <b>armor sets</b> - helmet, chest, gloves &amp; shins<span class="sub">each set is a full look with its own passive bonus</span></p>
+        </div>
+        <div class="howto-row">
+          <div class="howto-icon"><kbd class="num-badge">1</kbd></div>
+          <p>Every screen works with <b>keyboard only</b><span class="sub">Tab + Enter, or number keys to pick a card/shop item, Esc to back out</span></p>
         </div>
       </div>
       <button class="playbtn" id="btnHowtoGo"><span id="howtoGoLabel">Let's Go!</span></button>
@@ -1475,6 +1487,19 @@ function toast(msg){
 window.addEventListener("keydown", e=>{
   keys[e.key.toLowerCase()]=true;
   if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(e.key.toLowerCase())) e.preventDefault();
+
+  // keyboard-only shortcuts: number keys pick a level-up card or shop offer, Escape backs out
+  if(state==="levelup" && /^[1-3]$/.test(e.key)){
+    const idx = parseInt(e.key,10)-1;
+    if(currentCardChoices[idx]) chooseCard(idx);
+  } else if(state==="shop" && merchant && /^[1-4]$/.test(e.key)){
+    const idx = parseInt(e.key,10)-1;
+    if(merchant.offers[idx]) buyOffer(idx);
+  } else if(e.key==="Escape"){
+    if(state==="shop") document.getElementById("btnShopLeave").click();
+    else if(!document.getElementById("ov-upgrades").hidden) document.getElementById("btnUpgradesClose").click();
+    else if(state==="paused") document.getElementById("btnHowtoGo").click();
+  }
 });
 window.addEventListener("keyup", e=>{ keys[e.key.toLowerCase()]=false; });
 
@@ -1525,6 +1550,11 @@ function showOverlay(id){
   ["ov-title","ov-howto","ov-shop","ov-levelup","ov-bossclear","ov-upgrades","ov-dead","ov-win"].forEach(k=>{
     document.getElementById(k).hidden = (k!==id);
   });
+  if(id){
+    // auto-focus the first usable button so Enter/Space works immediately, no Tab needed
+    const btn = document.getElementById(id).querySelector("button:not(:disabled):not([hidden])");
+    if(btn) btn.focus();
+  }
 }
 
 /* ---------- boss checkpoint: continue deeper, or bank shards and quit ---------- */
@@ -1677,6 +1707,7 @@ function buildShopOverlay(){
     row.className = "shop-row";
     const iconStyle = offer.kind==="armor" ? ` style="background:${ARMOR_SETS[offer.armor].chest}"` : "";
     row.innerHTML =
+      `<kbd class="num-badge">${idx+1}</kbd>` +
       `<div class="shop-icon ${shopIconClass(offer)}"${iconStyle}></div>` +
       `<div class="shop-info">` +
         `<div class="shop-name">${shopItemLabel(offer)}</div>` +
@@ -1761,10 +1792,11 @@ function buildLevelUpOverlay(){
   const list = document.getElementById("cardList");
   list.innerHTML = "";
   currentCardChoices.forEach((card, idx)=>{
-    const el = document.createElement("div");
+    const el = document.createElement("button");
+    el.type = "button";
     el.className = "card card-"+card.type;
     el.innerHTML =
-      `<div class="card-badge">${card.type==="weapon"?"WEAPON":"MAGIC"}</div>` +
+      `<div class="card-top"><span class="card-badge">${card.type==="weapon"?"WEAPON":"MAGIC"}</span><kbd class="num-badge">${idx+1}</kbd></div>` +
       `<div class="card-name">${card.name}</div>` +
       `<div class="card-desc">${card.desc}</div>`;
     el.addEventListener("click", ()=>chooseCard(idx));
