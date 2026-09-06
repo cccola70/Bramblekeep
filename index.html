@@ -597,6 +597,12 @@
     padding:3px 10px 0;
   }
   .loadoutsep{ opacity:.5; }
+  .quest-tracker{
+    text-align:center;
+    font-family:"Silkscreen", monospace; font-size:9.5px; color:var(--coral-dark);
+    padding:2px 10px 0;
+  }
+  .quest-tracker[hidden]{ display:none; }
   .hud-right{ display:flex; align-items:center; gap:10px; }
   .goldwrap, .shardwrap{
     display:flex; align-items:center; gap:6px;
@@ -761,6 +767,14 @@
       <button class="playbtn" id="btnShopLeave" data-i18n>Leave</button>
     </div>
 
+    <div class="overlay" id="ov-quest" hidden>
+      <h1 id="questNpcName">Old Badger</h1>
+      <p id="questDesc">Defeat 5 enemies on this floor.</p>
+      <div class="shards-line"><span data-i18n>Reward</span>: <span id="questReward">+25g</span></div>
+      <button class="playbtn" id="btnQuestAccept" data-i18n>Accept</button>
+      <button class="secondarybtn" id="btnQuestDecline" data-i18n>Not Now</button>
+    </div>
+
     <div class="overlay" id="ov-levelup" hidden>
       <h1><span data-i18n>Level</span> <span id="levelupLevel">2</span>!</h1>
       <p data-i18n>Choose one upgrade.</p>
@@ -846,6 +860,7 @@
     </div>
   </div>
   <div class="loadout"><span id="className">Warrior</span><span class="loadoutsep">·</span><span id="weaponName">Sword</span><span class="loadoutsep">·</span><span id="armorName">Traveler's Garb</span></div>
+  <div class="quest-tracker" id="questTracker" hidden></div>
   <span class="xplabel"><span data-i18n>Lv.</span><span id="levelVal">1</span></span>
   <div class="xpbar-wrap"><div class="xpbar-fill" id="xpFill"></div></div>
   <div class="below">
@@ -916,6 +931,7 @@ function refreshDynamicText(){
   refreshTitleStats();
   if(!document.getElementById("ov-classselect").hidden){ buildAnimalRow(); buildClassSelect(); }
   if(state==="shop") buildShopOverlay();
+  if(state==="quest" && pendingQuestNpcId) openQuestOffer(pendingQuestNpcId);
   if(state==="levelup") buildLevelUpOverlay();
   if(state==="inventory") buildInventoryOverlay();
   if(state==="gearcompare" && pendingGearItem) buildGearCompareOverlay(pendingGearItem);
@@ -1047,6 +1063,18 @@ const I18N = {
   "Floor {0}": "第{0}層",
   "{0} awakens!": "{0}甦醒了！",
   "Second Wind! Saved from death!": "絕地重生！逃過一劫！",
+  // -- quest-giver NPCs --
+  "Old Badger": "老獾", "Firefly Pixie": "螢火妖精",
+  "Defeat {0} enemies on this floor.": "在本層擊敗{0}隻敵人。",
+  "Reach the stairs on this floor.": "抵達本層的樓梯。",
+  "Reward": "獎勵",
+  "Accept": "接受",
+  "Not Now": "暫不接受",
+  "Quest accepted: {0}": "已接下委託：{0}",
+  "Quest complete! +{0} gold": "委託完成！+{0} 金幣",
+  "Quest complete! +{0} XP": "委託完成！+{0} 經驗值",
+  "{0}: {1}/{2} defeated": "{0}：已擊敗 {1}/{2}",
+  "{0}: reach the stairs": "{0}：前往樓梯",
   "{0} has fallen!": "{0}已倒下！",
   "Found a wildberry potion! +2 HP": "發現野莓藥水！+2 HP",
   "Picked up the {0}!": "拾取了{0}！",
@@ -1240,6 +1268,18 @@ const I18N = {
   "Floor {0}": "第{0}层",
   "{0} awakens!": "{0}苏醒了！",
   "Second Wind! Saved from death!": "绝地重生！逃过一劫！",
+  // -- quest-giver NPCs --
+  "Old Badger": "老獾", "Firefly Pixie": "萤火妖精",
+  "Defeat {0} enemies on this floor.": "在本层击败{0}只敌人。",
+  "Reach the stairs on this floor.": "抵达本层的楼梯。",
+  "Reward": "奖励",
+  "Accept": "接受",
+  "Not Now": "暂不接受",
+  "Quest accepted: {0}": "已接下委托：{0}",
+  "Quest complete! +{0} gold": "委托完成！+{0} 金币",
+  "Quest complete! +{0} XP": "委托完成！+{0} 经验值",
+  "{0}: {1}/{2} defeated": "{0}：已击败 {1}/{2}",
+  "{0}: reach the stairs": "{0}：前往楼梯",
   "{0} has fallen!": "{0}已倒下！",
   "Found a wildberry potion! +2 HP": "发现野莓药水！+2 HP",
   "Picked up the {0}!": "拾取了{0}！",
@@ -1591,6 +1631,21 @@ const BOSSES = {
   boss:   { name:"The Bramble King",      hp:38, dmg:3, speed:48, radius:22, contactCd:0.6,  bodyColor:"#a558c9", bodyDark:"#7a3c9c", faceColor:"#e7cdfa", topper:"crown" },
   treant: { name:"The Elder Bramblewood", hp:50, dmg:4, speed:44, radius:24, contactCd:0.6,  bodyColor:"#6b8f4e", bodyDark:"#4d6b37", faceColor:"#e2edc9", topper:"leaves" },
   kraken: { name:"The Abyssal Tide",      hp:64, dmg:5, speed:42, radius:26, contactCd:0.55, bodyColor:"#3a7ea8", bodyDark:"#285870", faceColor:"#cdeffa", topper:"fins" },
+};
+
+/* ---------- wandering quest-giver NPCs ----------
+   A random one may appear on a non-boss floor (never while the player already has an active
+   quest). Bumping into them offers a simple task scoped to the floor it was given on:
+   "kill" quests track enemy kills via hitEnemy(); "survive" quests complete the moment the
+   player takes the stairs on that same floor. Anything left unfinished quietly lapses when the
+   floor changes (see nextFloor) - no penalty, the NPC just isn't there to turn it in to anymore. */
+const QUEST_NPCS = {
+  badger: { id:"badger", name:"Old Badger", robeColor:"#5c4a34", hoodColor:"#3a2b20",
+    type:"kill", target:5, desc:"Defeat {0} enemies on this floor.",
+    reward:"gold", rewardAmount:25 },
+  pixie: { id:"pixie", name:"Firefly Pixie", robeColor:"#9a7fd6", hoodColor:"#5a3d78",
+    type:"survive", desc:"Reach the stairs on this floor.",
+    reward:"xp", rewardAmount:10 },
 };
 
 /* ---------- biomes ---------- */
@@ -1954,22 +2009,29 @@ function bossParts(kind){
 }
 
 const MERCHANT_ROBE_PAL = {o:"#3a2b20", h:"#9a7a5a", b:"#7a5a3e", s:"#5a3d28", t:"#d8a94a"};
-function merchantParts(){
+// shared "robed NPC" rig (merchant + the two quest-giver NPCs) - a robe palette and hood/trim
+// color are the only things that vary, so all three reuse this one hand-authored part list
+function robedNpcParts(robePal, hoodColor){
   return [
     // robe (widens toward the ground)
-    {x:-3.8,y:0,w:7.6,h:9.2,sprite:{grid:SPRITES.merchantRobe,palette:MERCHANT_ROBE_PAL}, group:"robe"},
+    {x:-3.8,y:0,w:7.6,h:9.2,sprite:{grid:SPRITES.merchantRobe,palette:robePal}, group:"robe"},
     // hood + face
-    {x:-2.2,y:9.2,w:4.4,h:3.4,c:"#5a3d28"},
+    {x:-2.2,y:9.2,w:4.4,h:3.4,c:hoodColor},
     {x:-1.6,y:9.6,w:3.2,h:2.4,c:"#e8c9a0"},
     {x:-1.1,y:10.3,w:0.7,h:0.8,c:COL.ink},
     {x:0.5,y:10.3,w:0.7,h:0.8,c:COL.ink},
     {x:-0.6,y:9.7,w:1.2,h:0.6,c:"#c9a06a"},
-    {x:-1,y:12.4,w:2,h:1.6,c:"#5a3d28", group:"hood"},
+    {x:-1,y:12.4,w:2,h:1.6,c:hoodColor, group:"hood"},
     // lantern-holding arm
-    {x:2.3,y:1.6,w:1,h:2.6,c:"#3a2b20", group:"armR"},
+    {x:2.3,y:1.6,w:1,h:2.6,c:hoodColor, group:"armR"},
     {x:2,y:0,w:1.6,h:1.8,c:"#f5b942", group:"lantern"},
-    {x:2.3,y:1.8,w:1,h:0.4,c:"#3a2b20", group:"lantern"},
+    {x:2.3,y:1.8,w:1,h:0.4,c:hoodColor, group:"lantern"},
   ];
+}
+function merchantParts(){ return robedNpcParts(MERCHANT_ROBE_PAL, "#5a3d28"); }
+function questNpcPalette(hex){
+  const t = tonesFrom(hex);
+  return {o:t.out, h:t.hi, b:t.base, s:t.sh, t:"#d8a94a"};
 }
 
 /* ---------- generic animated draw ---------- */
@@ -2070,6 +2132,15 @@ function drawCreature(ctx, kind, ent, camx, camy){
     drawParts(ctx, merchantParts(), sx, sy - Math.abs(sway)*0.3, {
       flip: ent.facing<0, groupOffset,
     });
+  } else if(kind==="npc"){
+    const npcDef = QUEST_NPCS[ent.npcId] || QUEST_NPCS.badger;
+    const sway = Math.sin(t*1.6);
+    groupOffset.robe = {dx: sway*0.15};
+    groupOffset.hood = {dx: sway*0.1};
+    groupOffset.lantern = {dy: Math.sin(t*3)*0.4, dx: Math.sin(t*3)*0.15};
+    drawParts(ctx, robedNpcParts(questNpcPalette(npcDef.robeColor), npcDef.hoodColor), sx, sy - Math.abs(sway)*0.3, {
+      flip: ent.facing<0, groupOffset,
+    });
   } else if(kind==="boss"){
     const sq = 1+Math.sin(walkPhase*0.8)*0.1;
     squashX*=sq; squashY*=1/Math.max(0.85,sq);
@@ -2089,12 +2160,14 @@ const WALL=0, FLOOR=1, STAIRS=2;
 const VIEWW = 640, VIEWH = 416;
 const DASH_DURATION = 0.14, DASH_COOLDOWN = 1.4, DASH_DISTANCE = TILE*2;
 
-let state = "title"; // title | playing | paused | inventory | gearcompare | shop | levelup | bossclear | dead | win
+let state = "title"; // title | playing | paused | inventory | gearcompare | shop | quest | levelup | bossclear | dead | win
 let floorNum = 1;
 let map, rooms, decor, torches;
 let player, enemies, items, particles, dmgNums, toastQueue;
 let projectiles = [];
 let merchant = null;
+let questNpc = null;
+let pendingQuestNpcId = null;
 let biome = BIOMES[0];
 let camX=0, camY=0, shakeT=0, shakeMag=0;
 let keys = {};
@@ -2158,6 +2231,7 @@ function saveRun(){
       level: player.level, xp: player.xp, xpToNext: player.xpToNext,
       cardsChosen: player.cardsChosen||[],
       bossesDefeatedThisRun: player.bossesDefeatedThisRun||0,
+      activeQuest: player.activeQuest||null,
     };
     localStorage.setItem("bramble_run", JSON.stringify(data));
   }catch(e){}
@@ -2194,6 +2268,8 @@ function continueRun(){
   recalcMaxHp();
   player.hp = Math.max(1, Math.min(saved.hp!=null?saved.hp:player.maxhp, player.maxhp));
   floorNum = clamp(saved.floorNum||1, 1, TOTAL_FLOORS);
+  player.activeQuest = (saved.activeQuest && QUEST_NPCS[saved.activeQuest.npcId] && saved.activeQuest.floorNum===floorNum)
+    ? saved.activeQuest : null;
   particles = []; dmgNums = [];
   spawnFloor();
   state = "playing";
@@ -2394,7 +2470,7 @@ function spawnFloor(){
   if(floorNum === biome.range[1]){ spawnBossFloor(); return; }
 
   genMap();
-  enemies = []; items = []; merchant = null; projectiles = []; particles = particles||[]; dmgNums = dmgNums||[];
+  enemies = []; items = []; merchant = null; questNpc = null; projectiles = []; particles = particles||[]; dmgNums = dmgNums||[];
   const startRoom = rooms[0] || {x:2,y:2,w:6,h:6};
   const sc = center(startRoom);
   player.x = (sc.x+0.5)*TILE; player.y = (sc.y+0.5)*TILE;
@@ -2459,6 +2535,14 @@ function spawnFloor(){
     items.push({type:"armorPickup", armor:atype, x:ap.x, y:ap.y, t:0});
   }
 
+  // a wandering quest-giver appears sometimes, never while a quest is already active
+  if(!player.activeQuest && floorNum>1 && Math.random()<0.35){
+    const npcId = choice(Object.keys(QUEST_NPCS));
+    const npcRoom = choice(rooms.slice(1));
+    const np = randPointInRoom(npcRoom);
+    questNpc = { npcId, x:np.x, y:np.y, facing:-1, animT:Math.random()*10, armed:true };
+  }
+
   if(biomeFloor===1 && floorNum>1){
     toast(Tf("Entering {0}...", T(biome.name)));
   } else {
@@ -2469,7 +2553,7 @@ function spawnFloor(){
 
 function spawnBossFloor(){
   genBossArena();
-  enemies = []; items = []; merchant = null; projectiles = [];
+  enemies = []; items = []; merchant = null; questNpc = null; projectiles = [];
   const r = rooms[0];
   const cx = (r.x+r.w/2)*TILE;
   player.x = cx; player.y = (r.y+r.h-2.5)*TILE;
@@ -2508,7 +2592,7 @@ function newPlayer(classId, animalId){
     baseMaxHp:BASE_MAX_HP,weapon:(cls&&cls.weapon)||"sword",armor:"traveler",
     classId: classId||null, animalId: ANIMALS[animalId] ? animalId : "bunny",
     animT:0,moving:false,hurtTimer:0,invuln:0,
-    moveDirX:1,moveDirY:0,dashT:0,dashCd:0,dashDirX:1,dashDirY:0,movePath:null,
+    moveDirX:1,moveDirY:0,dashT:0,dashCd:0,dashDirX:1,dashDirY:0,movePath:null,activeQuest:null,
     attackTimer:0,attackCd:0,swingAngle:0,swingHasHit:false,
     gold:0,dying:false,dieT:0,bossesDefeatedThisRun:0,cardsChosen:[],
     xp:0,level:1,xpToNext:6,pickupRadius:18,regenAccum:0,
@@ -2592,6 +2676,7 @@ window.addEventListener("keydown", e=>{
     if(merchant.offers[idx]) buyOffer(idx);
   } else if(e.key==="Escape"){
     if(state==="shop") document.getElementById("btnShopLeave").click();
+    else if(state==="quest") document.getElementById("btnQuestDecline").click();
     else if(state==="inventory") closeInventory();
     else if(state==="gearcompare") closeGearCompare();
     else if(!document.getElementById("ov-upgrades").hidden) document.getElementById("btnUpgradesClose").click();
@@ -2629,7 +2714,9 @@ canvas.addEventListener("dblclick", e=>{
   const pt = canvasToWorld(e.clientX, e.clientY);
   const ddx = pt.x-player.x, ddy = pt.y-player.y;
   const dlen = Math.hypot(ddx,ddy)||1;
-  player.movePath = null;
+  // deliberately leaves player.movePath alone - the two mousedowns that make up this double
+  // click already pathed it to this same spot, so once the dash's brief override (dashT>0)
+  // ends, normal movement picks the route back up instead of the character just stopping
   triggerDash(ddx/dlen, ddy/dlen);
 });
 
@@ -2677,7 +2764,7 @@ function goWin(){
   updateTouchControls();
 }
 function showOverlay(id){
-  ["ov-title","ov-howto","ov-classselect","ov-shop","ov-levelup","ov-inventory","ov-gearcompare","ov-bossclear","ov-upgrades","ov-dead","ov-win"].forEach(k=>{
+  ["ov-title","ov-howto","ov-classselect","ov-shop","ov-quest","ov-levelup","ov-inventory","ov-gearcompare","ov-bossclear","ov-upgrades","ov-dead","ov-win"].forEach(k=>{
     document.getElementById(k).hidden = (k!==id);
   });
   if(id){
@@ -2894,7 +2981,7 @@ function currentOverlayId(){
   return null;
 }
 function openHowto(){
-  if(state==="paused" || state==="shop" || state==="levelup" || state==="bossclear" || state==="inventory" || state==="gearcompare") return; // an overlay is already active - ignore
+  if(state==="paused" || state==="shop" || state==="quest" || state==="levelup" || state==="bossclear" || state==="inventory" || state==="gearcompare") return; // an overlay is already active - ignore
   if(!document.getElementById("ov-upgrades").hidden) return; // skill trees open - ignore
   if(!document.getElementById("ov-classselect").hidden) return; // class select open - ignore
   if(state==="playing"){
@@ -3016,6 +3103,50 @@ document.getElementById("btnShopLeave").addEventListener("click", ()=>{
   showOverlay(null);
   updateTouchControls();
 });
+
+/* ---------- quest-giver NPCs ---------- */
+function openQuestOffer(npcId){
+  const def = QUEST_NPCS[npcId];
+  pendingQuestNpcId = npcId;
+  state = "quest";
+  document.getElementById("questNpcName").textContent = T(def.name);
+  document.getElementById("questDesc").textContent = Tf(def.desc, def.target);
+  document.getElementById("questReward").textContent = def.reward==="gold" ? `+${def.rewardAmount}g` : `+${def.rewardAmount} XP`;
+  showOverlay("ov-quest");
+  updateTouchControls();
+}
+document.getElementById("btnQuestAccept").addEventListener("click", ()=>{
+  const def = QUEST_NPCS[pendingQuestNpcId];
+  if(def){
+    player.activeQuest = { npcId:pendingQuestNpcId, type:def.type, target:def.target||1, progress:0, reward:def.reward, rewardAmount:def.rewardAmount, floorNum };
+    toast(Tf("Quest accepted: {0}", T(def.name)));
+    saveRun();
+  }
+  state = "playing";
+  showOverlay(null);
+  updateTouchControls();
+});
+document.getElementById("btnQuestDecline").addEventListener("click", ()=>{
+  state = "playing";
+  showOverlay(null);
+  updateTouchControls();
+});
+function completeQuest(){
+  const q = player.activeQuest;
+  if(!q) return;
+  if(q.reward==="gold"){
+    player.gold += q.rewardAmount;
+    toast(Tf("Quest complete! +{0} gold", q.rewardAmount));
+  } else if(q.reward==="xp"){
+    gainXP(q.rewardAmount);
+    toast(Tf("Quest complete! +{0} XP", q.rewardAmount));
+  }
+  burst(player.x, player.y-14, "#f5b942", 14, {maxSp:110,up:50});
+  Audio1.upgrade();
+  player.activeQuest = null;
+  renderHUDCanvas();
+  saveRun();
+}
 
 /* ---------- inventory (hero stats, equipment, abilities - 3 tabs) ---------- */
 let activeInvTab = "stats";
@@ -3607,6 +3738,18 @@ function update(dt){
     }
   }
 
+  // quest-giver NPC (same approach/step-away pattern as the merchant)
+  if(state==="playing" && questNpc){
+    const d = Math.hypot(questNpc.x-player.x, questNpc.y-player.y);
+    const closeR = player.radius+22, farR = closeR+18;
+    if(!questNpc.armed && d>farR) questNpc.armed = true;
+    if(questNpc.armed && d<closeR && !player.dying){
+      questNpc.armed = false;
+      openQuestOffer(questNpc.npcId);
+    }
+    if(questNpc.x!==player.x) questNpc.facing = (player.x-questNpc.x)>0?1:-1;
+  }
+
   updateParticles(dt);
 
   // camera
@@ -3868,6 +4011,11 @@ function hitEnemy(en, dmg, angle, knockback){
     const gemValue = en.type==="boss" ? 15 : en.type==="ghost" ? 2 : 1;
     const gemP = nearestFloorPixel(en.x+rand(-6,6), en.y+rand(-6,6));
     items.push({type:"gem", x:gemP.x, y:gemP.y, value:gemValue, t:0});
+    const q = player.activeQuest;
+    if(q && q.type==="kill" && q.floorNum===floorNum){
+      q.progress++;
+      if(q.progress>=q.target) completeQuest();
+    }
   }
 }
 
@@ -4058,8 +4206,15 @@ function pickup(it){
 }
 
 function nextFloor(){
+  // a "survive" quest (reach the stairs) resolves right here, before the floor actually
+  // changes; anything else left unfinished (a "kill" quest) just quietly lapses below -
+  // the NPC that gave it isn't on the next floor to turn it in to anyway
+  if(player.activeQuest && player.activeQuest.type==="survive" && player.activeQuest.floorNum===floorNum){
+    completeQuest();
+  }
   Audio1.stairs();
   floorNum++;
+  if(player.activeQuest && player.activeQuest.floorNum!==floorNum) player.activeQuest = null;
   if(floorNum>TOTAL_FLOORS){ goWin(); return; }
   spawnFloor();
 }
@@ -4097,15 +4252,17 @@ function render(){
   const visibleTorches = torches.filter(t=>t.x>=camX-60 && t.x<=camX+VIEWW+60 && t.y>=camY-60 && t.y<=camY+VIEWH+60);
   const drawList = [...items.map(it=>({it})), ...enemies.map(e=>({e})), ...visibleTorches.map(tc=>({tc})), {p:player}];
   if(merchant) drawList.push({m:merchant});
+  if(questNpc) drawList.push({n:questNpc});
   drawList.sort((a,b)=>{
-    const ay = a.it? a.it.y : a.e? a.e.y : a.m? a.m.y : a.tc? a.tc.y : a.p.y;
-    const by = b.it? b.it.y : b.e? b.e.y : b.m? b.m.y : b.tc? b.tc.y : b.p.y;
+    const ay = a.it? a.it.y : a.e? a.e.y : a.m? a.m.y : a.n? a.n.y : a.tc? a.tc.y : a.p.y;
+    const by = b.it? b.it.y : b.e? b.e.y : b.m? b.m.y : b.n? b.n.y : b.tc? b.tc.y : b.p.y;
     return ay-by;
   });
   for(const d of drawList){
     if(d.it) renderItem(d.it);
     else if(d.e) drawCreature(ctx, d.e.type, d.e, 0, 0);
     else if(d.m) drawCreature(ctx, "merchant", d.m, 0, 0);
+    else if(d.n) drawCreature(ctx, "npc", d.n, 0, 0);
     else if(d.tc) renderTorchFixture(d.tc);
     else if(d.p){ drawCreature(ctx, "player", d.p, 0, 0); renderDashCooldownRing(d.p); }
   }
@@ -4315,28 +4472,20 @@ function drawWeaponIcon(ctx, type){
 // still cooling down and shrinks away as it recovers; once ready it flashes to a bright outline
 function renderDashCooldownRing(p){
   if(!p || p.dying) return;
-  const r = 8, cx = p.x, cy = p.y + p.radius + 7;
   const frac = clamp((p.dashCd||0)/DASH_COOLDOWN, 0, 1);
+  if(frac<=0.001) return; // ready - no ring shown at all, only visible while actually cooling down
+  const r = 8, cx = p.x, cy = p.y + p.radius + 7;
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI*2);
   ctx.fillStyle = "rgba(58,40,20,0.4)";
   ctx.fill();
-  if(frac>0.001){
-    ctx.beginPath();
-    ctx.moveTo(cx,cy);
-    ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + Math.PI*2*frac);
-    ctx.closePath();
-    ctx.fillStyle = "rgba(20,14,10,0.65)";
-    ctx.fill();
-  } else {
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI*2);
-    ctx.strokeStyle = "#f5b942";
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.9;
-    ctx.stroke();
-  }
+  ctx.beginPath();
+  ctx.moveTo(cx,cy);
+  ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + Math.PI*2*frac);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(20,14,10,0.65)";
+  ctx.fill();
   ctx.restore();
 }
 function renderParticles(){
@@ -4406,6 +4555,17 @@ function renderHUDCanvas(){
   document.getElementById("levelVal").textContent = player? player.level : 1;
   const xpPct = player ? clamp((player.xp/player.xpToNext)*100, 0, 100) : 0;
   document.getElementById("xpFill").style.width = xpPct + "%";
+  const questEl = document.getElementById("questTracker");
+  const q = player && player.activeQuest;
+  if(q){
+    const def = QUEST_NPCS[q.npcId] || QUEST_NPCS.badger;
+    questEl.textContent = q.type==="kill"
+      ? Tf("{0}: {1}/{2} defeated", T(def.name), q.progress, q.target)
+      : Tf("{0}: reach the stairs", T(def.name));
+    questEl.hidden = false;
+  } else {
+    questEl.hidden = true;
+  }
 }
 
 /* ambient background dust behind cabinet */
