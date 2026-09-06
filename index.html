@@ -203,6 +203,17 @@
   button.playbtn:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
   .hint{font-size:11px; color:var(--lavender); opacity:.85;}
 
+  .lang-row{ display:flex; gap:6px; justify-content:center; margin:-4px 0 2px; }
+  .lang-btn{
+    font-family:"Baloo 2",sans-serif; font-weight:700; font-size:11px;
+    background:rgba(246,236,217,.08); color:var(--lavender);
+    border:1px solid rgba(246,236,217,.25); border-radius:999px;
+    padding:4px 11px; cursor:pointer; transition:background .15s ease, color .15s ease;
+  }
+  .lang-btn:hover{ background:rgba(246,236,217,.16); }
+  .lang-btn.selected{ background:var(--amber); color:var(--ink); border-color:var(--amber); }
+  .lang-btn:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
+
   .howto-list{
     display:flex; flex-direction:column; gap:12px;
     width:100%; max-width:340px;
@@ -235,6 +246,9 @@
   .keycluster .k-a{ grid-column:1; grid-row:2; }
   .keycluster .k-s{ grid-column:2; grid-row:2; }
   .keycluster .k-d{ grid-column:3; grid-row:2; }
+
+  .mini-joy{ width:34px; height:34px; border-radius:50%; background:rgba(246,236,217,.2); border:2px solid rgba(246,236,217,.4); position:relative; }
+  .mini-joy::after{ content:""; position:absolute; width:16px; height:16px; border-radius:50%; background:var(--coral); left:50%; top:50%; margin:-8px 0 0 -8px; }
 
   .bump-icon{ display:flex; align-items:center; gap:2px; }
   .bump-icon .bunny{ width:16px; height:16px; border-radius:4px; background:var(--coral); }
@@ -617,157 +631,162 @@
 <div class="cabinet">
   <div class="titlebar">
     <span class="logo">BRAMBLEKEEP</span>
-    <span class="tagline">a cozy little dungeon crawl</span>
+    <span class="tagline" data-i18n>a cozy little dungeon crawl</span>
   </div>
 
   <div class="viewport-frame">
     <canvas id="game" width="640" height="416"></canvas>
 
     <div class="overlay" id="ov-title">
-      <h1>Bramblekeep</h1>
-      <p>A small woodland knight, a very large dungeon. Pick your animal, pick your class, then get close to fight, find better gear, and find the stairs. Try not to get eaten.</p>
-      <div class="stat-row" id="bestRow" hidden>
-        <div><span class="label">Best floor</span><span class="value" id="bestFloor">1</span></div>
-        <div><span class="label">Best gold</span><span class="value" id="bestGold">0</span></div>
+      <div class="lang-row" id="langRow">
+        <button type="button" class="lang-btn selected" data-lang="en">EN</button>
+        <button type="button" class="lang-btn" data-lang="zh-Hant">繁體中文</button>
+        <button type="button" class="lang-btn" data-lang="zh-Hans">简体中文</button>
       </div>
-      <div class="shards-line">◆ <span id="titleShards">0</span> Shards</div>
-      <button class="playbtn" id="btnResumeRun" hidden>Continue Run &mdash; Floor <span id="resumeFloor">1</span></button>
-      <button class="playbtn" id="btnStart">Start Adventure</button>
-      <button class="secondarybtn" id="btnUpgradesTitle">Skill Trees</button>
-      <p class="hint">Move: WASD / Arrows &nbsp;·&nbsp; Bump enemies to attack</p>
+      <h1>Bramblekeep</h1>
+      <p data-i18n>A small woodland knight, a very large dungeon. Pick your animal, pick your class, then get close to fight, find better gear, and find the stairs. Try not to get eaten.</p>
+      <div class="stat-row" id="bestRow" hidden>
+        <div><span class="label" data-i18n>Best floor</span><span class="value" id="bestFloor">1</span></div>
+        <div><span class="label" data-i18n>Best gold</span><span class="value" id="bestGold">0</span></div>
+      </div>
+      <div class="shards-line">◆ <span id="titleShards">0</span> <span data-i18n>Shards</span></div>
+      <button class="playbtn" id="btnResumeRun" hidden><span data-i18n>Continue Run &mdash; Floor</span> <span id="resumeFloor">1</span></button>
+      <button class="playbtn" id="btnStart" data-i18n>Start Adventure</button>
+      <button class="secondarybtn" id="btnUpgradesTitle" data-i18n>Skill Trees</button>
+      <p class="hint" data-i18n-html>Move: WASD / Arrows &nbsp;·&nbsp; Attack automatically in range</p>
     </div>
 
     <div class="overlay" id="ov-howto" hidden>
-      <h1>How to Play</h1>
+      <h1 data-i18n>How to Play</h1>
       <div class="howto-list">
         <div class="howto-row">
-          <div class="howto-icon">
+          <div class="howto-icon" id="moveHowtoIcon">
             <div class="keycluster">
               <kbd class="k-w">W</kbd><kbd class="k-a">A</kbd><kbd class="k-s">S</kbd><kbd class="k-d">D</kbd>
             </div>
           </div>
-          <p>Move with <b>WASD</b> or arrow keys<span class="sub">or drag the joystick on touch screens</span></p>
+          <p id="moveHowtoText" data-i18n-html>Move with <b>WASD</b> or arrow keys<span class="sub">or drag the joystick on touch screens</span></p>
         </div>
         <div class="howto-row">
           <div class="howto-icon bump-icon"><span class="bunny"></span><span class="bolt">⚔</span><span class="foe"></span></div>
-          <p>Get close and you <b>attack automatically</b><span class="sub">no attack button - range and arc depend on your weapon</span></p>
+          <p data-i18n-html>Get close and you <b>attack automatically</b><span class="sub">no attack button - range and arc depend on your weapon</span></p>
         </div>
         <div class="howto-row">
           <div class="howto-icon dash-icon"><span class="streak short"></span><span class="streak"></span><span class="bunny2"></span></div>
-          <p><b>Space, left-click, or the DASH button</b> to dash<span class="sub">a quick invulnerable burst - great for closing in on ranged enemies</span></p>
+          <p id="dashHowtoText" data-i18n-html><b>Space, left-click, or the DASH button</b> to dash<span class="sub">a quick invulnerable burst - great for closing in on ranged enemies</span></p>
         </div>
         <div class="howto-row">
           <div class="howto-icon"><div class="stairs-icon"><i></i></div></div>
-          <p>Find the <b>glowing stairs</b> to descend<span class="sub">15 floors, 3 realms, each with a boss - merchants sell weapons, armor &amp; potions along the way</span></p>
+          <p data-i18n-html>Find the <b>glowing stairs</b> to descend<span class="sub">15 floors, 3 realms, each with a boss - merchants sell weapons, armor &amp; potions along the way</span></p>
         </div>
         <div class="howto-row">
           <div class="howto-icon" style="font-size:20px;">🎒</div>
-          <p>Press <b>I</b> or the backpack button for your <b>hero &amp; gear</b> screen<span class="sub">stats, equipment, and every ability you've picked</span></p>
+          <p id="invHowtoText" data-i18n-html>Press <b>I</b> or the backpack button for your <b>hero &amp; gear</b> screen<span class="sub">stats, equipment, and every ability you've picked</span></p>
         </div>
       </div>
-      <p class="hint">Every screen works with keyboard only &mdash; numbers pick a card, Esc backs out.</p>
+      <p class="hint" id="howtoBottomHint" data-i18n>Every screen works with keyboard only &mdash; numbers pick a card, Esc backs out.</p>
       <button class="playbtn" id="btnHowtoGo"><span id="howtoGoLabel">Let's Go!</span></button>
     </div>
 
     <div class="overlay" id="ov-classselect" hidden>
-      <h1>Choose Your Look &amp; Class</h1>
-      <p>Each animal grants a small perk; each class starts with a signature weapon and unlocks its own level-up cards for the run.</p>
+      <h1 data-i18n-html>Choose Your Look &amp; Class</h1>
+      <p data-i18n>Each animal grants a small perk; each class starts with a signature weapon and unlocks its own level-up cards for the run.</p>
       <div class="animal-row" id="animalRow"></div>
       <div class="class-grid" id="classGrid"></div>
     </div>
 
     <div class="overlay" id="ov-shop" hidden>
-      <h1>Wandering Merchant</h1>
-      <p>&ldquo;Ahh, a customer! Gold for goods, friend?&rdquo;</p>
+      <h1 data-i18n>Wandering Merchant</h1>
+      <p data-i18n-html>&ldquo;Ahh, a customer! Gold for goods, friend?&rdquo;</p>
       <div class="shop-list" id="shopList"></div>
-      <button class="playbtn" id="btnShopLeave">Leave</button>
+      <button class="playbtn" id="btnShopLeave" data-i18n>Leave</button>
     </div>
 
     <div class="overlay" id="ov-levelup" hidden>
-      <h1>Level <span id="levelupLevel">2</span>!</h1>
-      <p>Choose one upgrade.</p>
+      <h1><span data-i18n>Level</span> <span id="levelupLevel">2</span>!</h1>
+      <p data-i18n>Choose one upgrade.</p>
       <div class="card-list" id="cardList"></div>
       <button class="secondarybtn" id="btnReroll">Reroll</button>
     </div>
 
     <div class="overlay" id="ov-inventory" hidden>
-      <h1>Hero &amp; Gear</h1>
+      <h1 data-i18n-html>Hero &amp; Gear</h1>
       <div class="inv-wrap" id="invWrap"></div>
-      <button class="playbtn" id="btnInventoryClose">Close</button>
+      <button class="playbtn" id="btnInventoryClose" data-i18n>Close</button>
     </div>
 
     <div class="overlay" id="ov-gearcompare" hidden>
       <h1 id="gearCompareTitle">New Gear Found</h1>
       <div class="compare-table" id="compareWrap"></div>
       <div class="compare-actions">
-        <button class="playbtn" id="btnGearEquip">Equip</button>
-        <button class="secondarybtn" id="btnGearLeave">Leave It</button>
+        <button class="playbtn" id="btnGearEquip" data-i18n>Equip</button>
+        <button class="secondarybtn" id="btnGearLeave" data-i18n>Leave It</button>
       </div>
     </div>
 
     <div class="overlay" id="ov-dead" hidden>
-      <h1>Nom nom nom&hellip;</h1>
-      <p>You were a very good <span id="deadAnimal">woodland</span> knight. The dungeon disagrees.</p>
+      <h1 data-i18n>Nom nom nom&hellip;</h1>
+      <p id="deadMsg">You were a very good <span id="deadAnimal">woodland</span> knight. The dungeon disagrees.</p>
       <div class="stat-row">
-        <div><span class="label">Floor reached</span><span class="value" id="deadFloor">1</span></div>
-        <div><span class="label">Gold collected</span><span class="value" id="deadGold">0</span></div>
-        <div><span class="label">Shards banked</span><span class="value" id="deadShards">0</span></div>
+        <div><span class="label" data-i18n>Floor reached</span><span class="value" id="deadFloor">1</span></div>
+        <div><span class="label" data-i18n>Gold collected</span><span class="value" id="deadGold">0</span></div>
+        <div><span class="label" data-i18n>Shards banked</span><span class="value" id="deadShards">0</span></div>
       </div>
-      <button class="playbtn" id="btnRetry">Try Again</button>
-      <button class="secondarybtn" id="btnUpgradesDead">Skill Trees</button>
+      <button class="playbtn" id="btnRetry" data-i18n>Try Again</button>
+      <button class="secondarybtn" id="btnUpgradesDead" data-i18n>Skill Trees</button>
     </div>
 
     <div class="overlay" id="ov-win" hidden>
-      <h1>Bramblekeep Conquered!</h1>
-      <p>From bramble stone to forest root to the deep tide, every realm bows to one very small, very determined <span id="winAnimal">bunny</span>.</p>
+      <h1 data-i18n>Bramblekeep Conquered!</h1>
+      <p id="winMsg">From bramble stone to forest root to the deep tide, every realm bows to one very small, very determined <span id="winAnimal">bunny</span>.</p>
       <div class="stat-row">
-        <div><span class="label">Floors cleared</span><span class="value" id="winFloor">15</span></div>
-        <div><span class="label">Gold collected</span><span class="value" id="winGold">0</span></div>
-        <div><span class="label">Shards banked</span><span class="value" id="winShards">0</span></div>
+        <div><span class="label" data-i18n>Floors cleared</span><span class="value" id="winFloor">15</span></div>
+        <div><span class="label" data-i18n>Gold collected</span><span class="value" id="winGold">0</span></div>
+        <div><span class="label" data-i18n>Shards banked</span><span class="value" id="winShards">0</span></div>
       </div>
-      <button class="playbtn" id="btnAgain">Play Again</button>
-      <button class="secondarybtn" id="btnUpgradesWin">Skill Trees</button>
+      <button class="playbtn" id="btnAgain" data-i18n>Play Again</button>
+      <button class="secondarybtn" id="btnUpgradesWin" data-i18n>Skill Trees</button>
     </div>
 
     <div class="overlay" id="ov-bossclear" hidden>
       <h1 id="bossClearTitle">Boss Defeated!</h1>
-      <p>Push on to the next realm, or bank your gold as shards and return to Bramblekeep.</p>
+      <p data-i18n>Push on to the next realm, or bank your gold as shards and return to Bramblekeep.</p>
       <div class="stat-row">
-        <div><span class="label">Gold this run</span><span class="value" id="bcGold">0</span></div>
-        <div><span class="label">Shards if banked</span><span class="value" id="bcShards">0</span></div>
+        <div><span class="label" data-i18n>Gold this run</span><span class="value" id="bcGold">0</span></div>
+        <div><span class="label" data-i18n>Shards if banked</span><span class="value" id="bcShards">0</span></div>
       </div>
-      <button class="playbtn" id="btnContinueRun">Continue Deeper</button>
-      <button class="secondarybtn" id="btnBankQuit">Bank Shards &amp; Return</button>
+      <button class="playbtn" id="btnContinueRun" data-i18n>Continue Deeper</button>
+      <button class="secondarybtn" id="btnBankQuit" data-i18n-html>Bank Shards &amp; Return</button>
     </div>
 
     <div class="overlay" id="ov-upgrades" hidden>
-      <h1>Skill Trees</h1>
-      <div class="shards-line">◆ <span id="shardsVal">0</span> Shards</div>
+      <h1 data-i18n>Skill Trees</h1>
+      <div class="shards-line">◆ <span id="shardsVal">0</span> <span data-i18n>Shards</span></div>
       <div class="skilltree-scroll" id="skillTrees"></div>
-      <button class="playbtn" id="btnUpgradesClose">Back</button>
+      <button class="playbtn" id="btnUpgradesClose" data-i18n>Back</button>
     </div>
 
     <div class="joystick" id="joystick" hidden>
       <div class="joybase"><div class="joyknob" id="joyknob"></div></div>
     </div>
-    <button type="button" class="dashbtn" id="dashBtn" hidden>DASH</button>
+    <button type="button" class="dashbtn" id="dashBtn" hidden data-i18n>DASH</button>
   </div>
 
   <div class="hud">
     <div class="hearts"><canvas id="heartsCanvas" width="180" height="18"></canvas></div>
-    <div class="floorlabel">FLOOR <b id="floorNum">1</b>/15</div>
+    <div class="floorlabel"><span data-i18n>FLOOR</span> <b id="floorNum">1</b>/15</div>
     <div class="goldwrap"><span class="coin"></span><span id="goldval">0</span></div>
   </div>
   <div class="loadout"><span id="className">Warrior</span><span class="loadoutsep">·</span><span id="weaponName">Sword</span><span class="loadoutsep">·</span><span id="armorName">Traveler's Garb</span></div>
-  <span class="xplabel">Lv.<span id="levelVal">1</span></span>
+  <span class="xplabel"><span data-i18n>Lv.</span><span id="levelVal">1</span></span>
   <div class="xpbar-wrap"><div class="xpbar-fill" id="xpFill"></div></div>
   <div class="below">
     <span id="toast"></span>
     <span class="controls">
-      <span class="kbd-hint"><kbd>WASD</kbd> move</span>
-      <button id="inv" title="Hero &amp; gear (I)" aria-label="Hero and gear">🎒</button>
-      <button id="help" title="How to play" aria-label="How to play">?</button>
-      <button id="mute" title="Toggle sound" aria-label="Toggle sound">🔊</button>
+      <span class="kbd-hint"><kbd>WASD</kbd> <span data-i18n>move</span></span>
+      <button id="inv" title="Hero &amp; gear (I)" aria-label="Hero and gear" data-i18n-title data-i18n-aria>🎒</button>
+      <button id="help" title="How to play" aria-label="How to play" data-i18n-title data-i18n-aria>?</button>
+      <button id="mute" title="Toggle sound" aria-label="Toggle sound" data-i18n-title data-i18n-aria>🔊</button>
     </span>
   </div>
   <pre id="debugbox"></pre>
@@ -776,6 +795,455 @@
 <script>
 (function(){
 "use strict";
+
+/* ---------- localization ----------
+   T(s) looks up the exact English source string "s" in the current language's dictionary
+   and returns its translation, or "s" itself if untranslated/English - so every call site
+   stays readable (wrap the English literal in T(...)) and nothing breaks if a key is missing.
+   Tf(template, ...args) is for strings with an embedded dynamic value (a name, a number):
+   the template uses {0},{1}... placeholders that get filled in after translation. */
+const LANGS = ["en","zh-Hant","zh-Hans"];
+let lang = "en";
+try{ const saved = localStorage.getItem("bramble_lang"); if(LANGS.includes(saved)) lang = saved; }catch(e){}
+function T(s){
+  if(lang==="en" || s==null) return s;
+  const d = I18N[lang];
+  return (d && Object.prototype.hasOwnProperty.call(d,s)) ? d[s] : s;
+}
+function Tf(template, ...args){
+  return T(template).replace(/\{(\d+)\}/g, (m,i)=> args[i]!=null ? args[i] : m);
+}
+function setLang(l){
+  if(!LANGS.includes(l) || l===lang) return;
+  lang = l;
+  try{ localStorage.setItem("bramble_lang", l); }catch(e){}
+  applyStaticI18n();
+  updateLangButtons();
+  refreshDynamicText();
+}
+function updateLangButtons(){
+  document.querySelectorAll(".lang-btn").forEach(btn=>{
+    btn.classList.toggle("selected", btn.dataset.lang===lang);
+  });
+}
+function applyStaticI18n(){
+  document.querySelectorAll("[data-i18n]").forEach(el=>{
+    if(el.dataset.i18nOrig==null) el.dataset.i18nOrig = el.textContent;
+    el.textContent = T(el.dataset.i18nOrig);
+  });
+  document.querySelectorAll("[data-i18n-html]").forEach(el=>{
+    if(el.dataset.i18nOrig==null) el.dataset.i18nOrig = el.innerHTML;
+    el.innerHTML = T(el.dataset.i18nOrig);
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach(el=>{
+    if(el.dataset.i18nOrigTitle==null) el.dataset.i18nOrigTitle = el.getAttribute("title")||"";
+    el.setAttribute("title", T(el.dataset.i18nOrigTitle));
+  });
+  document.querySelectorAll("[data-i18n-aria]").forEach(el=>{
+    if(el.dataset.i18nOrigAria==null) el.dataset.i18nOrigAria = el.getAttribute("aria-label")||"";
+    el.setAttribute("aria-label", T(el.dataset.i18nOrigAria));
+  });
+}
+// re-renders whatever's currently on screen so a language switch takes effect immediately,
+// even mid-run - each of these no-ops safely if its overlay/state isn't the active one
+function refreshDynamicText(){
+  refreshTitleStats();
+  if(!document.getElementById("ov-classselect").hidden){ buildAnimalRow(); buildClassSelect(); }
+  if(state==="shop") buildShopOverlay();
+  if(state==="levelup") buildLevelUpOverlay();
+  if(state==="inventory") buildInventoryOverlay();
+  if(state==="gearcompare" && pendingGearItem) buildGearCompareOverlay(pendingGearItem);
+  if(!document.getElementById("ov-upgrades").hidden) buildUpgradesOverlay();
+  if(document.getElementById("howtoGoLabel")) document.getElementById("howtoGoLabel").textContent = (pausedFrom==="playing") ? T("Resume") : T("Let's Go!");
+  const rerollBtn = document.getElementById("btnReroll");
+  if(rerollBtn) rerollBtn.textContent = rerollsLeft>0 ? T("Reroll") : T("No rerolls left");
+  if(player) renderHUDCanvas();
+}
+
+// Traditional/Simplified Chinese translations, keyed by the exact English source string (or,
+// for lines with an embedded dynamic value, an "{0}"/"{1}" template - see T()/Tf() above).
+const I18N = {
+"zh-Hant": {
+  // -- title / chrome --
+  "a cozy little dungeon crawl": "溫馨的小小地牢冒險",
+  "A small woodland knight, a very large dungeon. Pick your animal, pick your class, then get close to fight, find better gear, and find the stairs. Try not to get eaten.": "一位嬌小的森林騎士，一座無比巨大的地牢。選擇你的動物與職業，靠近敵人自動攻擊，尋找更好的裝備，找到樓梯下樓。小心別被吃掉。",
+  "Best floor": "最佳樓層",
+  "Best gold": "最高金幣",
+  "Shards": "碎片",
+  "Continue Run — Floor":"繼續冒險－樓層",
+  "Start Adventure": "開始冒險",
+  "Skill Trees": "技能樹",
+  "Move: WASD / Arrows &nbsp;·&nbsp; Attack automatically in range": "移動：WASD／方向鍵 &nbsp;·&nbsp; 進入範圍自動攻擊",
+  "Lv.": "等級",
+  "move": "移動",
+  "FLOOR": "樓層",
+  "Hero & gear (I)":"英雄與裝備（I）",
+  "Hero and gear": "英雄與裝備",
+  "How to play": "遊戲說明",
+  "Toggle sound": "切換音效",
+  "DASH": "衝刺",
+  // -- howto --
+  "How to Play": "遊戲玩法",
+  "Move with <b>WASD</b> or arrow keys<span class=\"sub\">or drag the joystick on touch screens</span>": "使用 <b>WASD</b> 或方向鍵移動<span class=\"sub\">觸控裝置可拖曳搖桿移動</span>",
+  "Drag the joystick to move<span class=\"sub\">it appears bottom-left once you start</span>": "拖曳搖桿以移動<span class=\"sub\">開始遊戲後會出現在左下角</span>",
+  "Get close and you <b>attack automatically</b><span class=\"sub\">no attack button - range and arc depend on your weapon</span>": "靠近敵人即會<b>自動攻擊</b><span class=\"sub\">沒有攻擊鍵，攻擊距離與範圍取決於你的武器</span>",
+  "<b>Space, left-click, or the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "按<b>空白鍵、滑鼠左鍵或衝刺鍵</b>來衝刺<span class=\"sub\">短暫無敵的快速位移，很適合欺身接近遠程敵人</span>",
+  "<b>Tap the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "點按<b>衝刺鍵</b>來衝刺<span class=\"sub\">短暫無敵的快速位移，很適合欺身接近遠程敵人</span>",
+  "Find the <b>glowing stairs</b> to descend<span class=\"sub\">15 floors, 3 realms, each with a boss - merchants sell weapons, armor &amp; potions along the way</span>": "找到<b>發光的樓梯</b>以下樓<span class=\"sub\">共15層、3個領域，每個領域皆有首領－商人會沿途販售武器、護甲與藥水</span>",
+  "Press <b>I</b> or the backpack button for your <b>hero &amp; gear</b> screen<span class=\"sub\">stats, equipment, and every ability you've picked</span>": "按下 <b>I</b> 鍵或背包鍵開啟<b>英雄與裝備</b>畫面<span class=\"sub\">查看數值、裝備，以及你選擇過的每個能力</span>",
+  "Tap the backpack button for your <b>hero &amp; gear</b> screen<span class=\"sub\">stats, equipment, and every ability you've picked</span>": "點按背包鍵開啟<b>英雄與裝備</b>畫面<span class=\"sub\">查看數值、裝備，以及你選擇過的每個能力</span>",
+  "Every screen works with keyboard only — numbers pick a card, Esc backs out.":"每個畫面皆可只用鍵盤操作 — 數字鍵可選擇卡片，Esc 鍵可返回。",
+  "Tap to choose on every screen.": "每個畫面皆可直接點按選擇。",
+  "Resume": "繼續遊戲",
+  "Let's Go!": "出發！",
+  // -- class select --
+  "Choose Your Look &amp; Class": "選擇外觀與職業",
+  "Each animal grants a small perk; each class starts with a signature weapon and unlocks its own level-up cards for the run.": "每種動物皆提供小小的加成；每個職業皆會以招牌武器起始，並在本輪冒險中解鎖專屬升級卡片。",
+  // -- shop --
+  "Wandering Merchant": "流浪商人",
+  "“Ahh, a customer! Gold for goods, friend?”":"「啊，來客人了！用金幣換點貨吧，朋友？」",
+  "Leave": "離開",
+  "Wildberry Potion (+3 HP)": "野莓藥水（+3 HP）",
+  "Full Heal": "完全恢復",
+  "Restores 3 HP on the spot.": "立即恢復3點生命值。",
+  "Fully restores your health.": "完全恢復你的生命值。",
+  "Bought the {0}!": "已購買{0}！",
+  "Equipped the {0}!": "已裝備{0}！",
+  "Quaffed a potion! +3 HP": "喝下藥水！+3 HP",
+  "Fully healed!": "生命值已完全恢復！",
+  // -- level up --
+  "Level": "等級",
+  "Choose one upgrade.": "選擇一項升級。",
+  "WEAPON": "武器",
+  "CLASS": "職業",
+  "MAGIC": "魔法",
+  "Reroll": "重抽",
+  "No rerolls left": "沒有重抽次數了",
+  // -- inventory --
+  "Hero &amp; Gear": "英雄與裝備",
+  "Close": "關閉",
+  "Hero Stats": "英雄數值",
+  "{0} the {1}": "{1}{0}",
+  "HP": "生命值",
+  "Gold": "金幣",
+  "Floor": "樓層",
+  "Move Speed": "移動速度",
+  "Weapon DMG": "武器傷害",
+  "Attack CD": "攻擊冷卻",
+  "Range": "攻擊距離",
+  "Dmg Reduction": "減傷",
+  "Ranged Block": "遠程格擋",
+  "Gold Bonus": "金幣加成",
+  "Pickup Radius": "拾取範圍",
+  "Equipment": "裝備",
+  "Weapon": "武器",
+  "Armor": "護甲",
+  "Companion": "夥伴",
+  "Abilities": "能力",
+  "No abilities picked up yet &mdash; level up to choose one.": "尚未獲得任何能力 &mdash; 升級後即可選擇。",
+  "Class": "職業",
+  "Magic": "魔法",
+  // -- gear compare --
+  "Found: {0}": "發現：{0}",
+  "Damage": "傷害",
+  "Attack Speed": "攻擊速度",
+  "Knockback": "擊退力",
+  "Max HP": "最大生命值",
+  "Regen": "生命回復",
+  "Contact Reduction": "接觸減傷",
+  "Equip": "裝備",
+  "Leave It": "留在原地",
+  // -- dead / win / boss clear --
+  "Nom nom nom…":"咕嘰咕嘰……",
+  "You were a very good {0} knight. The dungeon disagrees.": "你曾是位優秀的{0}騎士。只是地牢不這麼認為。",
+  "Floor reached": "抵達樓層",
+  "Gold collected": "收集金幣",
+  "Shards banked": "存入碎片",
+  "Try Again": "再試一次",
+  "Bramblekeep Conquered!": "荊棘堡壘已被征服！",
+  "From bramble stone to forest root to the deep tide, every realm bows to one very small, very determined {0}.": "從荊棘岩石到森林樹根，再到深海浪潮，每個領域都向這隻嬌小卻無比堅定的{0}俯首稱臣。",
+  "Floors cleared": "通關樓層",
+  "Play Again": "再玩一次",
+  "{0} Defeated!": "{0}已被擊敗！",
+  "Push on to the next realm, or bank your gold as shards and return to Bramblekeep.": "繼續前往下一個領域，或將金幣兌換為碎片並返回荊棘堡壘。",
+  "Gold this run": "本輪金幣",
+  "Shards if banked": "兌換碎片數",
+  "Continue Deeper": "繼續深入",
+  "Bank Shards &amp; Return": "兌換碎片並返回",
+  "Back": "返回",
+  "MAX": "已滿級",
+  "Adventurer": "冒險者",
+  // -- toasts --
+  "Entering {0}...": "正在進入{0}……",
+  "Floor {0}": "第{0}層",
+  "{0} awakens!": "{0}甦醒了！",
+  "Second Wind! Saved from death!": "絕地重生！逃過一劫！",
+  "{0} has fallen!": "{0}已倒下！",
+  "Found a wildberry potion! +2 HP": "發現野莓藥水！+2 HP",
+  "Picked up the {0}!": "拾取了{0}！",
+  // -- weapons --
+  "Bramble Sword": "荊棘之劍", "Sword": "劍", "Quick, balanced slashes. Reliable in any scrap.": "快速均衡的斬擊，適合任何近戰場合。",
+  "Long Spear": "長矛", "Spear": "矛", "Long reach thrust — poke foes from a safer distance.": "長距離突刺——能在較安全的距離戳刺敵人。",
+  "Bramble Axe": "荊棘之斧", "Axe": "斧", "Wide cleaving swing that catches everything nearby.": "大範圍劈砍，能擊中周圍所有敵人。",
+  "War Hammer": "戰錘", "Hammer": "錘", "Slow but devastating — stuns whatever it hits.": "緩慢但威力驚人——擊中目標會使其暈眩。",
+  "Emberwood Staff": "餘燼木法杖", "Staff": "法杖", "Hurls a slow arcane bolt from very long range.": "從極遠距離投出緩慢的奧術彈。",
+  "Hunter's Bow": "獵人之弓", "Bow": "弓", "Fires a fast arrow with excellent range.": "射出速度快、射程遠的箭矢。",
+  "Storm Gauntlets": "風暴拳套", "Gauntlets": "拳套", "Blazing-fast jabs with almost no cooldown.": "極速連續出拳，冷卻時間極短。",
+  "Bramble Greatsword": "荊棘巨劍", "Greatsword": "巨劍", "A massive two-handed blade - slow, but a wide, heavy cleave.": "沉重的雙手巨劍——速度緩慢，但能造成大範圍的重擊。",
+  "Bramble Nunchaku": "荊棘雙節棍", "Nunchaku": "雙節棍", "Twin sticks spun in a fast, wide flurry.": "雙節棍快速揮舞，形成大範圍連擊。",
+  // -- armor --
+  "Traveler's Garb": "旅人服裝", "Traveler": "旅人", "A dependable start. 3 max HP.": "可靠的起始裝備。最大生命值3點。",
+  "Shadowfen Leathers": "暗影沼澤皮甲", "Shadowfen": "暗影沼澤", "+20% move speed. 4 max HP.": "移動速度+20%。最大生命值4點。",
+  "Tidewoven Scale": "潮織鱗甲", "Tidewoven": "潮織", "Regenerate 1 HP every 6 seconds. 4 max HP.": "每6秒恢復1點生命值。最大生命值4點。",
+  "Kingsbane Regalia": "弒王華服", "Kingsbane": "弒王", "+15% weapon damage. 5 max HP.": "武器傷害+15%。最大生命值5點。",
+  "Bramble Plate": "荊棘鎧甲", "Take 20% less contact damage. 6 max HP.": "承受的接觸傷害-20%。最大生命值6點。",
+  "Aegis Bulwark": "神盾壁壘", "Aegis": "神盾", "A shield takes half the damage from ranged attacks. 4 max HP.": "盾牌能使遠程攻擊傷害減半。最大生命值4點。",
+  // -- generic level-up cards --
+  "Sharpened Edge": "銳化刃口", "+1 damage with your weapon": "武器傷害+1",
+  "Quick Hands": "疾手", "15% faster attacks": "攻擊速度+15%",
+  "Long Reach": "長臂", "+20% weapon range": "武器攻擊距離+20%",
+  "Wide Swing": "廣域揮擊", "+15% swing arc": "揮擊範圍+15%",
+  "Heavy Blow": "重擊", "+30% knockback": "擊退力+30%",
+  "Battle Stride": "戰鬥步伐", "Move 25% faster while attacking": "攻擊時移動速度+25%",
+  "Twin Fangs": "雙牙", "15% chance to strike twice": "15%機率造成二連擊",
+  "Vitality": "活力", "+1 max HP, fully restored": "最大生命值+1，並完全恢復",
+  "Swift Boots": "疾風之靴", "+12% move speed": "移動速度+12%",
+  "Magnet Charm": "磁力護符", "+40% pickup radius": "拾取範圍+40%",
+  "Vampiric Fang": "吸血獠牙", "10% chance to heal 1 HP on hit": "命中時10%機率恢復1點生命值",
+  "Regeneration": "生命回復", "Slowly regenerate HP over time": "隨時間緩慢恢復生命值",
+  "Thorns": "荊棘反擊", "Reflect 1 damage to attackers": "反彈1點傷害給攻擊者",
+  "Second Wind": "絕地重生", "Survive one fatal blow at 1 HP": "免於一次致命打擊，保留1點生命值",
+  "Lucky Charm": "幸運護符", "+20% gold from all sources": "所有來源的金幣獲得+20%",
+  "Bramble Ward": "荊棘護盾", "Take 15% less contact damage": "承受的接觸傷害-15%",
+  // -- classes + class cards --
+  "Warrior": "戰士", "A balanced melee fighter, tough and reliable.": "均衡型近戰戰士，強韌又可靠。",
+  "Cleave": "劈砍", "+25% swing arc": "揮擊範圍+25%",
+  "Juggernaut": "不屈巨人", "+20% max HP": "最大生命值+20%",
+  "Retaliate": "反擊", "+2 thorns damage": "荊棘反擊傷害+2",
+  "Mage": "法師", "A ranged spellcaster who blasts foes from afar.": "遠程施法者，能從遠處轟擊敵人。",
+  "Arcane Focus": "奧術專注", "+30% spell damage": "法術傷害+30%",
+  "Piercing Bolt": "穿透彈", "Spells pierce through enemies": "法術可穿透敵人",
+  "Overcharge": "超載", "-20% spell cooldown": "法術冷卻時間-20%",
+  "Ranger": "遊俠", "A precise archer who strikes from range.": "精準的遠程射手。",
+  "Eagle Eye": "鷹眼", "+25% bow range": "弓箭射程+25%",
+  "Multishot": "多重射擊", "20% chance to fire a second arrow": "20%機率額外射出第二支箭",
+  "Quick Draw": "快速拔箭", "-20% bow cooldown": "弓箭冷卻時間-20%",
+  "Monk": "武僧", "A lightning-fast striker with bare-knuckle gauntlets.": "以拳套快速連擊的格鬥家。",
+  "Flurry": "連環拳", "-20% gauntlet cooldown": "拳套冷卻時間-20%",
+  "Iron Fists": "鐵拳", "+40% gauntlet damage": "拳套傷害+40%",
+  "Adrenaline": "腎上腺素", "+15% move speed": "移動速度+15%",
+  // -- animals --
+  "Bunny": "兔子", "Fox": "狐狸", "Cat": "貓咪", "Bear": "熊", "Raccoon": "浣熊",
+  "+15% gold gained": "獲得金幣+15%",
+  "+10% double-hit chance": "雙重打擊機率+10%",
+  "+1 max HP": "最大生命值+1",
+  "+25% pickup radius": "拾取範圍+25%",
+  // -- bosses / biomes --
+  "The Bramble King": "荊棘王", "The Elder Bramblewood": "荊棘森林長老", "The Abyssal Tide": "深淵潮汐",
+  "Shadowfen Forest": "暗影沼澤森林", "The Sunken Shoals": "沉沒淺灘",
+  // -- skill trees --
+  "Survival": "生存", "Utility": "實用",
+  "Bramble Edge": "荊棘鋒刃", "+1 starting weapon damage": "初始武器傷害+1",
+  "Fury": "狂怒", "-5% attack cooldown": "攻擊冷卻時間-5%",
+  "Momentum": "衝力", "+10% knockback": "擊退力+10%",
+  "Thick Hide": "厚皮", "+1 starting max HP": "初始最大生命值+1",
+  "Second Chance": "第二次機會", "+1 starting Second Wind charge": "初始絕地重生次數+1",
+  "Quick Recovery": "快速恢復", "+regeneration over time": "隨時間增加生命回復",
+  "Treasure Hunter": "尋寶獵人", "+10% gold gained": "獲得金幣+10%",
+  "Magnetism": "磁力", "+15% pickup radius": "拾取範圍+15%",
+  "Head Start": "領先起步", "+5 starting gold": "初始金幣+5",
+},
+"zh-Hans": {
+  // -- title / chrome --
+  "a cozy little dungeon crawl": "温馨的小小地牢冒险",
+  "A small woodland knight, a very large dungeon. Pick your animal, pick your class, then get close to fight, find better gear, and find the stairs. Try not to get eaten.": "一位娇小的森林骑士，一座无比巨大的地牢。选择你的动物与职业，靠近敌人自动攻击，寻找更好的装备，找到楼梯下楼。小心别被吃掉。",
+  "Best floor": "最佳楼层",
+  "Best gold": "最高金币",
+  "Shards": "碎片",
+  "Continue Run — Floor":"继续冒险－楼层",
+  "Start Adventure": "开始冒险",
+  "Skill Trees": "技能树",
+  "Move: WASD / Arrows &nbsp;·&nbsp; Attack automatically in range": "移动：WASD／方向键 &nbsp;·&nbsp; 进入范围自动攻击",
+  "Lv.": "等级",
+  "move": "移动",
+  "FLOOR": "楼层",
+  "Hero & gear (I)":"英雄与装备（I）",
+  "Hero and gear": "英雄与装备",
+  "How to play": "游戏说明",
+  "Toggle sound": "切换音效",
+  "DASH": "冲刺",
+  // -- howto --
+  "How to Play": "游戏玩法",
+  "Move with <b>WASD</b> or arrow keys<span class=\"sub\">or drag the joystick on touch screens</span>": "使用 <b>WASD</b> 或方向键移动<span class=\"sub\">触控设备可拖动摇杆移动</span>",
+  "Drag the joystick to move<span class=\"sub\">it appears bottom-left once you start</span>": "拖动摇杆以移动<span class=\"sub\">开始游戏后会出现在左下角</span>",
+  "Get close and you <b>attack automatically</b><span class=\"sub\">no attack button - range and arc depend on your weapon</span>": "靠近敌人即会<b>自动攻击</b><span class=\"sub\">没有攻击键，攻击距离与范围取决于你的武器</span>",
+  "<b>Space, left-click, or the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "按<b>空格键、鼠标左键或冲刺键</b>来冲刺<span class=\"sub\">短暂无敌的快速位移，很适合欺身接近远程敌人</span>",
+  "<b>Tap the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "点按<b>冲刺键</b>来冲刺<span class=\"sub\">短暂无敌的快速位移，很适合欺身接近远程敌人</span>",
+  "Find the <b>glowing stairs</b> to descend<span class=\"sub\">15 floors, 3 realms, each with a boss - merchants sell weapons, armor &amp; potions along the way</span>": "找到<b>发光的楼梯</b>以下楼<span class=\"sub\">共15层、3个领域，每个领域皆有首领－商人会沿途贩售武器、护甲与药水</span>",
+  "Press <b>I</b> or the backpack button for your <b>hero &amp; gear</b> screen<span class=\"sub\">stats, equipment, and every ability you've picked</span>": "按下 <b>I</b> 键或背包键开启<b>英雄与装备</b>画面<span class=\"sub\">查看数值、装备，以及你选择过的每个能力</span>",
+  "Tap the backpack button for your <b>hero &amp; gear</b> screen<span class=\"sub\">stats, equipment, and every ability you've picked</span>": "点按背包键开启<b>英雄与装备</b>画面<span class=\"sub\">查看数值、装备，以及你选择过的每个能力</span>",
+  "Every screen works with keyboard only — numbers pick a card, Esc backs out.":"每个画面皆可只用键盘操作 — 数字键可选择卡片，Esc 键可返回。",
+  "Tap to choose on every screen.": "每个画面皆可直接点按选择。",
+  "Resume": "继续游戏",
+  "Let's Go!": "出发！",
+  // -- class select --
+  "Choose Your Look &amp; Class": "选择外观与职业",
+  "Each animal grants a small perk; each class starts with a signature weapon and unlocks its own level-up cards for the run.": "每种动物皆提供小小的加成；每个职业皆会以招牌武器起始，并在本轮冒险中解锁专属升级卡片。",
+  // -- shop --
+  "Wandering Merchant": "流浪商人",
+  "“Ahh, a customer! Gold for goods, friend?”":"「啊，来客人了！用金币换点货吧，朋友？」",
+  "Leave": "离开",
+  "Wildberry Potion (+3 HP)": "野莓药水（+3 HP）",
+  "Full Heal": "完全恢复",
+  "Restores 3 HP on the spot.": "立即恢复3点生命值。",
+  "Fully restores your health.": "完全恢复你的生命值。",
+  "Bought the {0}!": "已购买{0}！",
+  "Equipped the {0}!": "已装备{0}！",
+  "Quaffed a potion! +3 HP": "喝下药水！+3 HP",
+  "Fully healed!": "生命值已完全恢复！",
+  // -- level up --
+  "Level": "等级",
+  "Choose one upgrade.": "选择一项升级。",
+  "WEAPON": "武器",
+  "CLASS": "职业",
+  "MAGIC": "魔法",
+  "Reroll": "重抽",
+  "No rerolls left": "没有重抽次数了",
+  // -- inventory --
+  "Hero &amp; Gear": "英雄与装备",
+  "Close": "关闭",
+  "Hero Stats": "英雄数值",
+  "{0} the {1}": "{1}{0}",
+  "HP": "生命值",
+  "Gold": "金币",
+  "Floor": "楼层",
+  "Move Speed": "移动速度",
+  "Weapon DMG": "武器伤害",
+  "Attack CD": "攻击冷却",
+  "Range": "攻击距离",
+  "Dmg Reduction": "减伤",
+  "Ranged Block": "远程格挡",
+  "Gold Bonus": "金币加成",
+  "Pickup Radius": "拾取范围",
+  "Equipment": "装备",
+  "Weapon": "武器",
+  "Armor": "护甲",
+  "Companion": "伙伴",
+  "Abilities": "能力",
+  "No abilities picked up yet &mdash; level up to choose one.": "尚未获得任何能力 &mdash; 升级后即可选择。",
+  "Class": "职业",
+  "Magic": "魔法",
+  // -- gear compare --
+  "Found: {0}": "发现：{0}",
+  "Damage": "伤害",
+  "Attack Speed": "攻击速度",
+  "Knockback": "击退力",
+  "Max HP": "最大生命值",
+  "Regen": "生命回复",
+  "Contact Reduction": "接触减伤",
+  "Equip": "装备",
+  "Leave It": "留在原地",
+  // -- dead / win / boss clear --
+  "Nom nom nom…":"咕叽咕叽……",
+  "You were a very good {0} knight. The dungeon disagrees.": "你曾是位优秀的{0}骑士。只是地牢不这么认为。",
+  "Floor reached": "抵达楼层",
+  "Gold collected": "收集金币",
+  "Shards banked": "存入碎片",
+  "Try Again": "再试一次",
+  "Bramblekeep Conquered!": "荆棘堡垒已被征服！",
+  "From bramble stone to forest root to the deep tide, every realm bows to one very small, very determined {0}.": "从荆棘岩石到森林树根，再到深海浪潮，每个领域都向这只娇小却无比坚定的{0}俯首称臣。",
+  "Floors cleared": "通关楼层",
+  "Play Again": "再玩一次",
+  "{0} Defeated!": "{0}已被击败！",
+  "Push on to the next realm, or bank your gold as shards and return to Bramblekeep.": "继续前往下一个领域，或将金币兑换为碎片并返回荆棘堡垒。",
+  "Gold this run": "本轮金币",
+  "Shards if banked": "兑换碎片数",
+  "Continue Deeper": "继续深入",
+  "Bank Shards &amp; Return": "兑换碎片并返回",
+  "Back": "返回",
+  "MAX": "已满级",
+  "Adventurer": "冒险者",
+  // -- toasts --
+  "Entering {0}...": "正在进入{0}……",
+  "Floor {0}": "第{0}层",
+  "{0} awakens!": "{0}苏醒了！",
+  "Second Wind! Saved from death!": "绝地重生！逃过一劫！",
+  "{0} has fallen!": "{0}已倒下！",
+  "Found a wildberry potion! +2 HP": "发现野莓药水！+2 HP",
+  "Picked up the {0}!": "拾取了{0}！",
+  // -- weapons --
+  "Bramble Sword": "荆棘之剑", "Sword": "剑", "Quick, balanced slashes. Reliable in any scrap.": "快速均衡的斩击，适合任何近战场合。",
+  "Long Spear": "长矛", "Spear": "矛", "Long reach thrust — poke foes from a safer distance.": "长距离突刺——能在较安全的距离戳刺敌人。",
+  "Bramble Axe": "荆棘之斧", "Axe": "斧", "Wide cleaving swing that catches everything nearby.": "大范围劈砍，能击中周围所有敌人。",
+  "War Hammer": "战锤", "Hammer": "锤", "Slow but devastating — stuns whatever it hits.": "缓慢但威力惊人——击中目标会使其晕眩。",
+  "Emberwood Staff": "余烬木法杖", "Staff": "法杖", "Hurls a slow arcane bolt from very long range.": "从极远距离投出缓慢的奥术弹。",
+  "Hunter's Bow": "猎人之弓", "Bow": "弓", "Fires a fast arrow with excellent range.": "射出速度快、射程远的箭矢。",
+  "Storm Gauntlets": "风暴拳套", "Gauntlets": "拳套", "Blazing-fast jabs with almost no cooldown.": "极速连续出拳，冷却时间极短。",
+  "Bramble Greatsword": "荆棘巨剑", "Greatsword": "巨剑", "A massive two-handed blade - slow, but a wide, heavy cleave.": "沉重的双手巨剑——速度缓慢，但能造成大范围的重击。",
+  "Bramble Nunchaku": "荆棘双节棍", "Nunchaku": "双节棍", "Twin sticks spun in a fast, wide flurry.": "双节棍快速挥舞，形成大范围连击。",
+  // -- armor --
+  "Traveler's Garb": "旅人服装", "Traveler": "旅人", "A dependable start. 3 max HP.": "可靠的起始装备。最大生命值3点。",
+  "Shadowfen Leathers": "暗影沼泽皮甲", "Shadowfen": "暗影沼泽", "+20% move speed. 4 max HP.": "移动速度+20%。最大生命值4点。",
+  "Tidewoven Scale": "潮织鳞甲", "Tidewoven": "潮织", "Regenerate 1 HP every 6 seconds. 4 max HP.": "每6秒恢复1点生命值。最大生命值4点。",
+  "Kingsbane Regalia": "弑王华服", "Kingsbane": "弑王", "+15% weapon damage. 5 max HP.": "武器伤害+15%。最大生命值5点。",
+  "Bramble Plate": "荆棘铠甲", "Take 20% less contact damage. 6 max HP.": "承受的接触伤害-20%。最大生命值6点。",
+  "Aegis Bulwark": "神盾壁垒", "Aegis": "神盾", "A shield takes half the damage from ranged attacks. 4 max HP.": "盾牌能使远程攻击伤害减半。最大生命值4点。",
+  // -- generic level-up cards --
+  "Sharpened Edge": "锐化刃口", "+1 damage with your weapon": "武器伤害+1",
+  "Quick Hands": "疾手", "15% faster attacks": "攻击速度+15%",
+  "Long Reach": "长臂", "+20% weapon range": "武器攻击距离+20%",
+  "Wide Swing": "广域挥击", "+15% swing arc": "挥击范围+15%",
+  "Heavy Blow": "重击", "+30% knockback": "击退力+30%",
+  "Battle Stride": "战斗步伐", "Move 25% faster while attacking": "攻击时移动速度+25%",
+  "Twin Fangs": "双牙", "15% chance to strike twice": "15%几率造成二连击",
+  "Vitality": "活力", "+1 max HP, fully restored": "最大生命值+1，并完全恢复",
+  "Swift Boots": "疾风之靴", "+12% move speed": "移动速度+12%",
+  "Magnet Charm": "磁力护符", "+40% pickup radius": "拾取范围+40%",
+  "Vampiric Fang": "吸血獠牙", "10% chance to heal 1 HP on hit": "命中时10%几率恢复1点生命值",
+  "Regeneration": "生命回复", "Slowly regenerate HP over time": "随时间缓慢恢复生命值",
+  "Thorns": "荆棘反击", "Reflect 1 damage to attackers": "反弹1点伤害给攻击者",
+  "Second Wind": "绝地重生", "Survive one fatal blow at 1 HP": "免于一次致命打击，保留1点生命值",
+  "Lucky Charm": "幸运护符", "+20% gold from all sources": "所有来源的金币获得+20%",
+  "Bramble Ward": "荆棘护盾", "Take 15% less contact damage": "承受的接触伤害-15%",
+  // -- classes + class cards --
+  "Warrior": "战士", "A balanced melee fighter, tough and reliable.": "均衡型近战战士，强韧又可靠。",
+  "Cleave": "劈砍", "+25% swing arc": "挥击范围+25%",
+  "Juggernaut": "不屈巨人", "+20% max HP": "最大生命值+20%",
+  "Retaliate": "反击", "+2 thorns damage": "荆棘反击伤害+2",
+  "Mage": "法师", "A ranged spellcaster who blasts foes from afar.": "远程施法者，能从远处轰击敌人。",
+  "Arcane Focus": "奥术专注", "+30% spell damage": "法术伤害+30%",
+  "Piercing Bolt": "穿透弹", "Spells pierce through enemies": "法术可穿透敌人",
+  "Overcharge": "超载", "-20% spell cooldown": "法术冷却时间-20%",
+  "Ranger": "游侠", "A precise archer who strikes from range.": "精准的远程射手。",
+  "Eagle Eye": "鹰眼", "+25% bow range": "弓箭射程+25%",
+  "Multishot": "多重射击", "20% chance to fire a second arrow": "20%几率额外射出第二支箭",
+  "Quick Draw": "快速拔箭", "-20% bow cooldown": "弓箭冷却时间-20%",
+  "Monk": "武僧", "A lightning-fast striker with bare-knuckle gauntlets.": "以拳套快速连击的格斗家。",
+  "Flurry": "连环拳", "-20% gauntlet cooldown": "拳套冷却时间-20%",
+  "Iron Fists": "铁拳", "+40% gauntlet damage": "拳套伤害+40%",
+  "Adrenaline": "肾上腺素", "+15% move speed": "移动速度+15%",
+  // -- animals --
+  "Bunny": "兔子", "Fox": "狐狸", "Cat": "猫咪", "Bear": "熊", "Raccoon": "浣熊",
+  "+15% gold gained": "获得金币+15%",
+  "+10% double-hit chance": "双重打击几率+10%",
+  "+1 max HP": "最大生命值+1",
+  "+25% pickup radius": "拾取范围+25%",
+  // -- bosses / biomes --
+  "The Bramble King": "荆棘王", "The Elder Bramblewood": "荆棘森林长老", "The Abyssal Tide": "深渊潮汐",
+  "Shadowfen Forest": "暗影沼泽森林", "The Sunken Shoals": "沉没浅滩",
+  // -- skill trees --
+  "Survival": "生存", "Utility": "实用",
+  "Bramble Edge": "荆棘锋刃", "+1 starting weapon damage": "初始武器伤害+1",
+  "Fury": "狂怒", "-5% attack cooldown": "攻击冷却时间-5%",
+  "Momentum": "冲力", "+10% knockback": "击退力+10%",
+  "Thick Hide": "厚皮", "+1 starting max HP": "初始最大生命值+1",
+  "Second Chance": "第二次机会", "+1 starting Second Wind charge": "初始绝地重生次数+1",
+  "Quick Recovery": "快速恢复", "+regeneration over time": "随时间增加生命回复",
+  "Treasure Hunter": "寻宝猎人", "+10% gold gained": "获得金币+10%",
+  "Magnetism": "磁力", "+15% pickup radius": "拾取范围+15%",
+  "Head Start": "领先起步", "+5 starting gold": "初始金币+5",
+},
+};
 
 /* ---------- utility ---------- */
 const rand = (a,b)=>a+Math.random()*(b-a);
@@ -937,6 +1405,10 @@ const SPRITES = {
   // back-of-head: same silhouette as "head" but faceless, with a center hair-part seam -
   // shown when the player walks up/away from the camera (see playerParts's facingDir)
   headBack: ["..dddddd..",".dFFFFFFd.","dFFFFFFFFd","dFfffffffd","dffffffffd","dfffsffffd","dfffsffffd","dsffffffsd",".dssssssd.","..dssssd.."],
+  // side profile: same cranium as "head" (unflipped = facing right, mirrored via ent.facing
+  // for facing left) with the far eye/blush hidden and a small muzzle bump poking out the
+  // right edge - shown when horizontal movement dominates (see computeFacingDir)
+  headSide: ["..dddddd...",".dFFFFFFd..","dFFFFFFFFd.","dFfffffffdf","dmffffffmdf","dmmmmmmemdd","dffffffkfd.","dsffffffsd.",".dssssssd..","..dssssd..."],
   // ear shapes - one per animal, all drawn in the same fur/highlight/shadow/blush tones
   earBunny: [".dd.","dFFd","dFFd","dffd","dffd","dkkd","dssd",".dd."],
   earFox:   [".DD.",".DD.","dffd","dffd","dkkd",".dd."],
@@ -1297,7 +1769,7 @@ function weaponSwingPose(style, p){
 function playerParts(weaponType, armorKey, facingDir, animalId){
   const animal = ANIMALS[animalId] || ANIMALS.bunny;
   const pal = playerBodyPalette(animalId);
-  const headGrid = facingDir==="back" ? SPRITES.headBack : SPRITES.head;
+  const headGrid = facingDir==="back" ? SPRITES.headBack : facingDir==="side" ? SPRITES.headSide : SPRITES.head;
   const earGrid = SPRITES[animal.earSprite] || SPRITES.earBunny;
   const eb = animal.earBox;
   const parts = [
@@ -1738,6 +2210,14 @@ function tileAt(px,py){ const tx=Math.floor(px/TILE), ty=Math.floor(py/TILE); if
 function solidAt(px,py){ return tileAt(px,py)===WALL; }
 // scans outward tile-by-tile for the nearest open floor and returns its center in pixels;
 // used to rescue anything (a dropped item, the player) that would otherwise end up embedded in a wall
+// picks which of the player's 3 directional sprites (side/back/front) to show for a given
+// movement vector - horizontal movement always wins so walking left/right shows the side
+// profile (headSide) rather than the front/back sprite mirrored sideways; a vertical-dominant
+// vector shows back (walking away, my<0) or front (walking toward camera, my>=0)
+function computeFacingDir(dx,dy){
+  if(Math.abs(dx) >= Math.abs(dy)) return "side";
+  return dy<0 ? "back" : "front";
+}
 function nearestFloorPixel(px,py){
   if(!solidAt(px,py)) return {x:px,y:py};
   const tx0 = Math.floor(px/TILE), ty0 = Math.floor(py/TILE);
@@ -1837,9 +2317,9 @@ function spawnFloor(){
   }
 
   if(biomeFloor===1 && floorNum>1){
-    toast(`Entering ${biome.name}...`);
+    toast(Tf("Entering {0}...", T(biome.name)));
   } else {
-    toast(`Floor ${floorNum}`);
+    toast(Tf("Floor {0}", floorNum));
   }
   saveRun();
 }
@@ -1856,7 +2336,7 @@ function spawnBossFloor(){
   enemies.push(makeEnemy(choice(["slime","bat"]), cx-90, (r.y+r.h/2)*TILE));
   enemies.push(makeEnemy(choice(["slime","bat"]), cx+90, (r.y+r.h/2)*TILE));
 
-  toast(`${BOSSES[biome.bossKind].name} awakens!`);
+  toast(Tf("{0} awakens!", T(BOSSES[biome.bossKind].name)));
   Audio1.boss();
   saveRun();
 }
@@ -2003,7 +2483,8 @@ function goDead(){
   try{ localStorage.setItem("bramble_bestFloor", bestFloor); localStorage.setItem("bramble_bestGold", bestGold); }catch(e){}
   const earned = bankRun();
   clearSavedRun();
-  document.getElementById("deadAnimal").textContent = (ANIMALS[player.animalId]||ANIMALS.bunny).name.toLowerCase();
+  const deadAnimalName = T((ANIMALS[player.animalId]||ANIMALS.bunny).name).toLowerCase();
+  document.getElementById("deadMsg").innerHTML = Tf("You were a very good {0} knight. The dungeon disagrees.", deadAnimalName);
   document.getElementById("deadFloor").textContent = floorNum;
   document.getElementById("deadGold").textContent = player.gold;
   document.getElementById("deadShards").textContent = earned;
@@ -2019,7 +2500,8 @@ function goWin(){
   try{ localStorage.setItem("bramble_bestFloor", bestFloor); localStorage.setItem("bramble_bestGold", bestGold); }catch(e){}
   const earned = bankRun();
   clearSavedRun();
-  document.getElementById("winAnimal").textContent = (ANIMALS[player.animalId]||ANIMALS.bunny).name.toLowerCase();
+  const winAnimalName = T((ANIMALS[player.animalId]||ANIMALS.bunny).name).toLowerCase();
+  document.getElementById("winMsg").innerHTML = Tf("From bramble stone to forest root to the deep tide, every realm bows to one very small, very determined {0}.", winAnimalName);
   document.getElementById("winFloor").textContent = TOTAL_FLOORS;
   document.getElementById("winGold").textContent = player.gold;
   document.getElementById("winShards").textContent = earned;
@@ -2054,8 +2536,8 @@ function buildAnimalRow(){
     btn.setAttribute("aria-pressed", animal.id===selectedAnimal ? "true" : "false");
     btn.innerHTML =
       `<canvas class="animal-icon-canvas" width="32" height="32"></canvas>` +
-      `<div class="animal-name">${animal.name}</div>` +
-      `<div class="animal-perk">${animal.perkDesc}</div>`;
+      `<div class="animal-name">${T(animal.name)}</div>` +
+      `<div class="animal-perk">${T(animal.perkDesc)}</div>`;
     btn.addEventListener("click", ()=>{ selectedAnimal = animal.id; buildAnimalRow(); });
     row.appendChild(btn);
     drawAnimalIcon(btn.querySelector(".animal-icon-canvas").getContext("2d"), animal.id);
@@ -2079,9 +2561,9 @@ function buildClassSelect(){
     btn.innerHTML =
       `<kbd class="num-badge">${idx+1}</kbd>` +
       `<canvas class="class-icon-canvas" width="44" height="44"></canvas>` +
-      `<div class="class-name">${cls.name}</div>` +
-      `<div class="class-weaponname">${WEAPONS[cls.weapon].name}</div>` +
-      `<div class="class-desc">${cls.desc}</div>`;
+      `<div class="class-name">${T(cls.name)}</div>` +
+      `<div class="class-weaponname">${T(WEAPONS[cls.weapon].name)}</div>` +
+      `<div class="class-desc">${T(cls.desc)}</div>`;
     btn.addEventListener("click", ()=>startGame(cls.id));
     grid.appendChild(btn);
     const iconCanvas = btn.querySelector(".class-icon-canvas");
@@ -2105,7 +2587,7 @@ function autoCollectItems(){
 function showBossClear(){
   autoCollectItems();
   state = "bossclear";
-  document.getElementById("bossClearTitle").textContent = `${BOSSES[biome.bossKind].name} Defeated!`;
+  document.getElementById("bossClearTitle").textContent = Tf("{0} Defeated!", T(BOSSES[biome.bossKind].name));
   const previewBonus = (player.bossesDefeatedThisRun||0)*10;
   document.getElementById("bcGold").textContent = player.gold;
   document.getElementById("bcShards").textContent = player.gold + previewBonus;
@@ -2144,7 +2626,7 @@ function buildUpgradesOverlay(){
     const heading = document.createElement("div");
     heading.className = "tree-title";
     heading.style.color = tree.color;
-    heading.textContent = tree.name;
+    heading.textContent = T(tree.name);
     section.appendChild(heading);
     tree.nodes.forEach(node=>{
       const lvl = skillLevel(node.id);
@@ -2155,12 +2637,12 @@ function buildUpgradesOverlay(){
       row.className = "tree-node";
       row.innerHTML =
         `<div class="tree-node-info">` +
-          `<div class="tree-node-name">${node.name} <span class="tree-node-lvl">${lvl}/${node.maxLevel}</span></div>` +
-          `<div class="tree-node-desc">${node.desc}</div>` +
+          `<div class="tree-node-name">${T(node.name)} <span class="tree-node-lvl">${lvl}/${node.maxLevel}</span></div>` +
+          `<div class="tree-node-desc">${T(node.desc)}</div>` +
         `</div>`;
       const btn = document.createElement("button");
       btn.className = "tree-buy";
-      btn.textContent = maxed ? "MAX" : cost+" ◆";
+      btn.textContent = maxed ? T("MAX") : cost+" ◆";
       btn.disabled = maxed || !afford;
       btn.addEventListener("click", ()=>buySkill(node.id));
       row.appendChild(btn);
@@ -2226,24 +2708,24 @@ function openHowto(){
   } else {
     pausedFrom = currentOverlayId() || "ov-title";
   }
-  document.getElementById("howtoGoLabel").textContent = (pausedFrom==="playing") ? "Resume" : "Let's Go!";
+  document.getElementById("howtoGoLabel").textContent = (pausedFrom==="playing") ? T("Resume") : T("Let's Go!");
   showOverlay("ov-howto");
   updateTouchControls();
 }
 
 /* ---------- merchant shop ---------- */
 function shopItemLabel(offer){
-  if(offer.kind==="weapon") return WEAPONS[offer.weapon].name;
-  if(offer.kind==="armor") return ARMOR_SETS[offer.armor].name;
-  if(offer.kind==="potion") return "Wildberry Potion (+3 HP)";
-  if(offer.kind==="heal") return "Full Heal";
+  if(offer.kind==="weapon") return T(WEAPONS[offer.weapon].name);
+  if(offer.kind==="armor") return T(ARMOR_SETS[offer.armor].name);
+  if(offer.kind==="potion") return T("Wildberry Potion (+3 HP)");
+  if(offer.kind==="heal") return T("Full Heal");
   return "";
 }
 function shopItemDesc(offer){
-  if(offer.kind==="weapon") return WEAPONS[offer.weapon].desc || "";
-  if(offer.kind==="armor") return ARMOR_SETS[offer.armor].desc || "";
-  if(offer.kind==="potion") return "Restores 3 HP on the spot.";
-  if(offer.kind==="heal") return "Fully restores your health.";
+  if(offer.kind==="weapon") return T(WEAPONS[offer.weapon].desc) || "";
+  if(offer.kind==="armor") return T(ARMOR_SETS[offer.armor].desc) || "";
+  if(offer.kind==="potion") return T("Restores 3 HP on the spot.");
+  if(offer.kind==="heal") return T("Fully restores your health.");
   return "";
 }
 function shopIconClass(offer){
@@ -2284,17 +2766,17 @@ function buyOffer(idx){
   if(offer.kind==="weapon"){
     player.weapon = offer.weapon;
     player.attackTimer = 0; player.attackCd = 0; player.swingHasHit = false;
-    toast(`Bought the ${WEAPONS[offer.weapon].name}!`);
+    toast(Tf("Bought the {0}!", T(WEAPONS[offer.weapon].name)));
   } else if(offer.kind==="armor"){
     player.armor = offer.armor;
     recalcMaxHp();
-    toast(`Equipped the ${ARMOR_SETS[offer.armor].name}!`);
+    toast(Tf("Equipped the {0}!", T(ARMOR_SETS[offer.armor].name)));
   } else if(offer.kind==="potion"){
     player.hp = Math.min(player.maxhp, player.hp+3);
-    toast("Quaffed a potion! +3 HP");
+    toast(T("Quaffed a potion! +3 HP"));
   } else if(offer.kind==="heal"){
     player.hp = player.maxhp;
-    toast("Fully healed!");
+    toast(T("Fully healed!"));
   }
   Audio1.upgrade();
   burst(player.x, player.y-14, "#fff", 10, {maxSp:90,up:40});
@@ -2328,7 +2810,7 @@ function closeInventory(){
   updateTouchControls();
 }
 function invStatRow(label, val){
-  return `<div class="inv-stat"><span class="inv-stat-label">${label}</span><span class="inv-stat-val">${val}</span></div>`;
+  return `<div class="inv-stat"><span class="inv-stat-label">${T(label)}</span><span class="inv-stat-val">${val}</span></div>`;
 }
 function buildInventoryOverlay(){
   const wrap = document.getElementById("invWrap");
@@ -2346,7 +2828,7 @@ function buildInventoryOverlay(){
   const heroSec = document.createElement("div");
   heroSec.className = "inv-section";
   heroSec.innerHTML =
-    `<div class="inv-heading">Hero Stats${cls?` &mdash; ${cls.name} the ${animal.name}`:""}</div>` +
+    `<div class="inv-heading">${T("Hero Stats")}${cls?` &mdash; ${Tf("{0} the {1}", T(cls.name), T(animal.name))}`:""}</div>` +
     `<div class="inv-stat-grid">` +
       invStatRow("Level", player.level) +
       invStatRow("HP", `${Math.max(0,Math.ceil(player.hp))} / ${player.maxhp}`) +
@@ -2365,21 +2847,21 @@ function buildInventoryOverlay(){
 
   const gearSec = document.createElement("div");
   gearSec.className = "inv-section";
-  gearSec.innerHTML = `<div class="inv-heading">Equipment</div>`;
+  gearSec.innerHTML = `<div class="inv-heading">${T("Equipment")}</div>`;
   const gearList = document.createElement("div");
   gearList.className = "inv-item-list";
   gearList.innerHTML =
     `<div class="inv-item">` +
-      `<div class="inv-item-top"><span class="inv-item-name">${WEAPONS[player.weapon].name}</span><span class="inv-item-tag tag-weapon">Weapon</span></div>` +
-      `<div class="inv-item-desc">${WEAPONS[player.weapon].desc||""}</div>` +
+      `<div class="inv-item-top"><span class="inv-item-name">${T(WEAPONS[player.weapon].name)}</span><span class="inv-item-tag tag-weapon">${T("Weapon")}</span></div>` +
+      `<div class="inv-item-desc">${T(WEAPONS[player.weapon].desc)||""}</div>` +
     `</div>` +
     `<div class="inv-item">` +
-      `<div class="inv-item-top"><span class="inv-item-name">${armor.name}</span><span class="inv-item-tag tag-armor">Armor</span></div>` +
-      `<div class="inv-item-desc">${armor.desc||""}</div>` +
+      `<div class="inv-item-top"><span class="inv-item-name">${T(armor.name)}</span><span class="inv-item-tag tag-armor">${T("Armor")}</span></div>` +
+      `<div class="inv-item-desc">${T(armor.desc)||""}</div>` +
     `</div>` +
     `<div class="inv-item">` +
-      `<div class="inv-item-top"><span class="inv-item-name">${animal.name}</span><span class="inv-item-tag tag-companion">Companion</span></div>` +
-      `<div class="inv-item-desc">${animal.perkDesc}</div>` +
+      `<div class="inv-item-top"><span class="inv-item-name">${T(animal.name)}</span><span class="inv-item-tag tag-companion">${T("Companion")}</span></div>` +
+      `<div class="inv-item-desc">${T(animal.perkDesc)}</div>` +
     `</div>`;
   gearSec.appendChild(gearList);
   wrap.appendChild(gearSec);
@@ -2387,19 +2869,19 @@ function buildInventoryOverlay(){
   const abilSec = document.createElement("div");
   abilSec.className = "inv-section";
   const chosen = (player.cardsChosen||[]).map(id=>findCardById(id)).filter(Boolean);
-  abilSec.innerHTML = `<div class="inv-heading">Abilities${chosen.length?` (${chosen.length})`:""}</div>`;
+  abilSec.innerHTML = `<div class="inv-heading">${T("Abilities")}${chosen.length?` (${chosen.length})`:""}</div>`;
   const abilList = document.createElement("div");
   abilList.className = "inv-item-list";
   if(chosen.length===0){
-    abilList.innerHTML = `<div class="inv-empty">No abilities picked up yet &mdash; level up to choose one.</div>`;
+    abilList.innerHTML = `<div class="inv-empty">${T("No abilities picked up yet &mdash; level up to choose one.")}</div>`;
   } else {
     chosen.forEach(card=>{
       const row = document.createElement("div");
       row.className = "inv-item";
-      const tagLabel = card.type==="weapon"?"Weapon":card.type==="class"?"Class":"Magic";
+      const tagLabel = T(card.type==="weapon"?"Weapon":card.type==="class"?"Class":"Magic");
       row.innerHTML =
-        `<div class="inv-item-top"><span class="inv-item-name">${card.name}</span><span class="inv-item-tag tag-${card.type}">${tagLabel}</span></div>` +
-        `<div class="inv-item-desc">${card.desc}</div>`;
+        `<div class="inv-item-top"><span class="inv-item-name">${T(card.name)}</span><span class="inv-item-tag tag-${card.type}">${tagLabel}</span></div>` +
+        `<div class="inv-item-desc">${T(card.desc)}</div>`;
       abilList.appendChild(row);
     });
   }
@@ -2420,7 +2902,7 @@ function compareStatRow(label, curVal, newVal, curRaw, newRaw){
   let cls = "";
   if(newRaw > curRaw) cls = "better";
   else if(newRaw < curRaw) cls = "worse";
-  return `<div class="compare-row"><span class="compare-label">${label}</span><span class="compare-val">${curVal}</span><span class="compare-val ${cls}">${newVal}</span></div>`;
+  return `<div class="compare-row"><span class="compare-label">${T(label)}</span><span class="compare-val">${curVal}</span><span class="compare-val ${cls}">${newVal}</span></div>`;
 }
 function openGearCompare(it){
   pendingGearItem = it;
@@ -2442,9 +2924,9 @@ function buildGearCompareOverlay(it){
   if(it.type==="weaponPickup"){
     const curKey = player.weapon, newKey = it.weapon;
     const cur = computeEffectiveWeapon(curKey), neu = computeEffectiveWeapon(newKey);
-    title.textContent = `Found: ${WEAPONS[newKey].name}`;
-    html += `<div class="compare-desc">${WEAPONS[newKey].desc||""}</div>`;
-    html += `<div class="compare-head-row"><span></span><span>${WEAPONS[curKey].short}</span><span>${WEAPONS[newKey].short}</span></div>`;
+    title.textContent = Tf("Found: {0}", T(WEAPONS[newKey].name));
+    html += `<div class="compare-desc">${T(WEAPONS[newKey].desc)||""}</div>`;
+    html += `<div class="compare-head-row"><span></span><span>${T(WEAPONS[curKey].short)}</span><span>${T(WEAPONS[newKey].short)}</span></div>`;
     html += compareStatRow("Damage", fmtNum(cur.dmg), fmtNum(neu.dmg), cur.dmg, neu.dmg);
     html += compareStatRow("Range", Math.round(cur.range), Math.round(neu.range), cur.range, neu.range);
     html += compareStatRow("Attack Speed", (1/cur.cooldown).toFixed(1)+"/s", (1/neu.cooldown).toFixed(1)+"/s", 1/cur.cooldown, 1/neu.cooldown);
@@ -2452,9 +2934,9 @@ function buildGearCompareOverlay(it){
   } else if(it.type==="armorPickup"){
     const curKey = player.armor, newKey = it.armor;
     const curSet = ARMOR_SETS[curKey], newSet = ARMOR_SETS[newKey];
-    title.textContent = `Found: ${newSet.name}`;
-    html += `<div class="compare-desc">${newSet.desc||""}</div>`;
-    html += `<div class="compare-head-row"><span></span><span>${curSet.short}</span><span>${newSet.short}</span></div>`;
+    title.textContent = Tf("Found: {0}", T(newSet.name));
+    html += `<div class="compare-desc">${T(newSet.desc)||""}</div>`;
+    html += `<div class="compare-head-row"><span></span><span>${T(curSet.short)}</span><span>${T(newSet.short)}</span></div>`;
     const curHp = player.baseMaxHp+(curSet.maxHpBonus||0), newHp = player.baseMaxHp+(newSet.maxHpBonus||0);
     html += compareStatRow("Max HP", curHp, newHp, curHp, newHp);
     const curSpd = Math.round((curSet.moveSpeedMult||1)*100), newSpd = Math.round((newSet.moveSpeedMult||1)*100);
@@ -2514,15 +2996,15 @@ function buildLevelUpOverlay(){
     el.type = "button";
     el.className = "card card-"+card.type;
     el.innerHTML =
-      `<div class="card-top"><span class="card-badge">${card.type==="weapon"?"WEAPON":card.type==="class"?"CLASS":"MAGIC"}</span><kbd class="num-badge">${idx+1}</kbd></div>` +
-      `<div class="card-name">${card.name}</div>` +
-      `<div class="card-desc">${card.desc}</div>`;
+      `<div class="card-top"><span class="card-badge">${T(card.type==="weapon"?"WEAPON":card.type==="class"?"CLASS":"MAGIC")}</span><kbd class="num-badge">${idx+1}</kbd></div>` +
+      `<div class="card-name">${T(card.name)}</div>` +
+      `<div class="card-desc">${T(card.desc)}</div>`;
     el.addEventListener("click", ()=>chooseCard(idx));
     list.appendChild(el);
   });
   const rerollBtn = document.getElementById("btnReroll");
   rerollBtn.disabled = rerollsLeft<=0;
-  rerollBtn.textContent = rerollsLeft>0 ? "Reroll" : "No rerolls left";
+  rerollBtn.textContent = rerollsLeft>0 ? T("Reroll") : T("No rerolls left");
 }
 function chooseCard(idx){
   const card = currentCardChoices[idx];
@@ -2530,7 +3012,7 @@ function chooseCard(idx){
   card.apply(player);
   player.cardsChosen = player.cardsChosen||[];
   player.cardsChosen.push(card.id);
-  toast(`${card.name}!`);
+  toast(`${T(card.name)}!`);
   Audio1.upgrade();
   burst(player.x, player.y-14, card.type==="weapon"?"#ffd27a":"#b19bff", 14, {maxSp:110,up:50});
   renderHUDCanvas();
@@ -2548,6 +3030,9 @@ document.getElementById("btnReroll").addEventListener("click", ()=>{
   rerollsLeft--;
   currentCardChoices = drawCards(3);
   buildLevelUpOverlay();
+});
+document.querySelectorAll(".lang-btn").forEach(btn=>{
+  btn.addEventListener("click", ()=> setLang(btn.dataset.lang));
 });
 document.getElementById("btnStart").addEventListener("click", openHowto);
 document.getElementById("help").addEventListener("click", openHowto);
@@ -2573,6 +3058,19 @@ document.getElementById("mute").addEventListener("click", ()=>{
 
 /* ---------- touch controls (virtual joystick) ---------- */
 const isTouchDevice = matchMedia("(pointer:coarse)").matches || ("ontouchstart" in window);
+// swaps 3 of the how-to-play rows to touch-appropriate wording (drag-to-move, tap-to-dash,
+// tap-to-open) instead of the keyboard/mouse instructions - runs once, before the very first
+// applyStaticI18n() call, so translation capture (data-i18n-html's lazy orig-text snapshot)
+// locks in the correct device-specific English as the source text for both languages
+function localizeHowtoForDevice(){
+  if(!isTouchDevice) return;
+  document.getElementById("moveHowtoIcon").innerHTML = '<div class="mini-joy"></div>';
+  document.getElementById("moveHowtoText").innerHTML = 'Drag the joystick to move<span class="sub">it appears bottom-left once you start</span>';
+  document.getElementById("dashHowtoText").innerHTML = '<b>Tap the DASH button</b> to dash<span class="sub">a quick invulnerable burst - great for closing in on ranged enemies</span>';
+  document.getElementById("invHowtoText").innerHTML = 'Tap the backpack button for your <b>hero &amp; gear</b> screen<span class="sub">stats, equipment, and every ability you\'ve picked</span>';
+  document.getElementById("howtoBottomHint").textContent = "Tap to choose on every screen.";
+}
+localizeHowtoForDevice();
 const joystick = document.getElementById("joystick");
 const joyknob = document.getElementById("joyknob");
 let joyVec = {x:0,y:0}, joyActive = false, joyPointerId = null, joyCenter = {x:0,y:0};
@@ -2622,6 +3120,8 @@ joystick.addEventListener("pointermove", e=>{
 });
 
 refreshTitleStats();
+applyStaticI18n();
+updateLangButtons();
 
 /* ---------- update ---------- */
 function showDebug(err){
@@ -2712,7 +3212,7 @@ function update(dt){
     moveWithCollision(player, player.dashDirX*dashSpeed*dt, player.dashDirY*dashSpeed*dt);
     player.moving = true;
     if(player.dashDirX!==0) player.facing = player.dashDirX>0?1:-1;
-    player.facingDir = (Math.abs(player.dashDirY)>Math.abs(player.dashDirX) && player.dashDirY<0) ? "back" : "front";
+    player.facingDir = computeFacingDir(player.dashDirX, player.dashDirY);
   } else if(moving){
     const wpn = getEffectiveWeapon();
     const dirLen = rawLen||1;
@@ -2721,9 +3221,7 @@ function update(dt){
     const spd = player.speed*player.mods.moveSpeedMult*armorSpeedMult*inputMag*(player.attackTimer>0?wpn.moveSlow*player.mods.swingMoveMult:1);
     moveWithCollision(player, (mx/dirLen)*spd*dt, (my/dirLen)*spd*dt);
     if(mx!==0) player.facing = mx>0?1:-1;
-    // vertical movement dominating the input turns the character to show its back (walking
-    // away) or front (walking toward camera / sideways); left-right mirroring still applies on top
-    player.facingDir = (Math.abs(my)>Math.abs(mx) && my<0) ? "back" : "front";
+    player.facingDir = computeFacingDir(mx, my);
   }
   player.animT += dt;
   if(player.hurtTimer>0) player.hurtTimer-=dt;
@@ -2859,7 +3357,7 @@ function update(dt){
       player.mods.secondWindCharges--;
       player.hp = 1;
       player.invuln = 1.5;
-      toast("Second Wind! Saved from death!");
+      toast(T("Second Wind! Saved from death!"));
       Audio1.upgrade();
       burst(player.x, player.y-14, "#ffd27a", 16, {maxSp:130,up:60});
       shake(6,0.25);
@@ -3092,7 +3590,7 @@ function hitEnemy(en, dmg, angle, knockback){
     if(en.type==="boss"){
       const isFinalBoss = floorNum>=TOTAL_FLOORS;
       player.bossesDefeatedThisRun = (player.bossesDefeatedThisRun||0) + 1;
-      toast(`${BOSSES[en.bossKind].name} has fallen!`);
+      toast(Tf("{0} has fallen!", T(BOSSES[en.bossKind].name)));
       if(isFinalBoss) setTimeout(()=>goWin(), 900);
       else setTimeout(()=>showBossClear(), 900);
     }
@@ -3257,7 +3755,7 @@ function renderProjectiles(){
 function pickup(it){
   if(it.type==="potion"){
     player.hp = Math.min(player.maxhp, player.hp+2);
-    toast("Found a wildberry potion! +2 HP");
+    toast(T("Found a wildberry potion! +2 HP"));
     Audio1.pickup();
     burst(it.x,it.y-10, COL.moss, 10, {maxSp:80,up:40});
   } else if(it.type==="gold"){
@@ -3268,7 +3766,7 @@ function pickup(it){
     const oldWeapon = player.weapon;
     player.weapon = it.weapon;
     player.attackTimer = 0; player.attackCd = 0; player.swingHasHit = false;
-    toast(`Picked up the ${WEAPONS[it.weapon].name}!`);
+    toast(Tf("Picked up the {0}!", T(WEAPONS[it.weapon].name)));
     Audio1.upgrade();
     burst(it.x,it.y-10, "#fff", 16, {maxSp:120,up:60});
     shake(4,0.2);
@@ -3285,7 +3783,7 @@ function pickup(it){
   } else if(it.type==="armorPickup"){
     player.armor = it.armor;
     recalcMaxHp();
-    toast(`Equipped the ${ARMOR_SETS[it.armor].name}!`);
+    toast(Tf("Equipped the {0}!", T(ARMOR_SETS[it.armor].name)));
     Audio1.upgrade();
     burst(it.x,it.y-10, ARMOR_SETS[it.armor].chest, 16, {maxSp:120,up:60});
     shake(4,0.2);
@@ -3604,11 +4102,11 @@ function renderHUDCanvas(){
   }
   document.getElementById("floorNum").textContent = floorNum;
   document.getElementById("goldval").textContent = player? player.gold : 0;
-  document.getElementById("weaponName").textContent = (WEAPONS[player&&player.weapon] || WEAPONS.sword).short;
-  document.getElementById("armorName").textContent = (ARMOR_SETS[player&&player.armor] || ARMOR_SETS.traveler).name;
-  const animalName = (player && ANIMALS[player.animalId] && ANIMALS[player.animalId].name) || "";
-  const className = (player && CLASSES[player.classId] && CLASSES[player.classId].name) || "Adventurer";
-  document.getElementById("className").textContent = animalName ? `${animalName} ${className}` : className;
+  document.getElementById("weaponName").textContent = T((WEAPONS[player&&player.weapon] || WEAPONS.sword).short);
+  document.getElementById("armorName").textContent = T((ARMOR_SETS[player&&player.armor] || ARMOR_SETS.traveler).name);
+  const animalName = (player && ANIMALS[player.animalId] && T(ANIMALS[player.animalId].name)) || "";
+  const className = (player && CLASSES[player.classId] && T(CLASSES[player.classId].name)) || T("Adventurer");
+  document.getElementById("className").textContent = animalName ? Tf("{0} {1}", animalName, className) : className;
   document.getElementById("levelVal").textContent = player? player.level : 1;
   const xpPct = player ? clamp((player.xp/player.xpToNext)*100, 0, 100) : 0;
   document.getElementById("xpFill").style.width = xpPct + "%";
