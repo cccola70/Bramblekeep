@@ -132,7 +132,10 @@
     right:14px; bottom:14px;
     width:64px; height:64px;
     border-radius:50%;
-    background:rgba(245,185,66,.85);
+    --cd:0;
+    background:
+      conic-gradient(rgba(20,14,10,.68) calc(var(--cd)*360deg), transparent calc(var(--cd)*360deg)),
+      rgba(245,185,66,.85);
     border:2px solid rgba(255,255,255,.65);
     box-shadow:0 2px 6px rgba(0,0,0,.35);
     color:var(--ink);
@@ -263,10 +266,21 @@
   .stairs-icon{ width:26px; height:26px; border-radius:4px; background:#1c1524; display:flex; align-items:center; justify-content:center; }
   .stairs-icon i{ width:14px; height:14px; background:var(--amber); border-radius:2px; }
 
+  .shop-body{
+    display:flex; gap:12px; align-items:flex-start; justify-content:center;
+    width:100%; max-width:560px;
+  }
   .shop-list{
     display:flex; flex-direction:column; gap:10px;
-    width:100%; max-width:380px; margin:2px 0;
+    width:100%; max-width:380px; margin:2px 0; flex:1;
   }
+  .shop-tooltip.compare-table{
+    flex:none; width:172px; max-width:172px; margin-top:2px;
+    background:rgba(246,236,217,.1);
+    border:1px solid rgba(246,236,217,.22);
+    border-radius:12px; padding:9px;
+  }
+  .shop-tooltip[hidden]{ display:none; }
   .shop-row{
     display:flex; align-items:center; gap:12px;
     background:rgba(246,236,217,.08);
@@ -740,7 +754,10 @@
     <div class="overlay" id="ov-shop" hidden>
       <h1 data-i18n>Wandering Merchant</h1>
       <p data-i18n-html>&ldquo;Ahh, a customer! Gold for goods, friend?&rdquo;</p>
-      <div class="shop-list" id="shopList"></div>
+      <div class="shop-body">
+        <div class="shop-list" id="shopList"></div>
+        <div class="shop-tooltip compare-table" id="shopTooltip" hidden></div>
+      </div>
       <button class="playbtn" id="btnShopLeave" data-i18n>Leave</button>
     </div>
 
@@ -952,6 +969,8 @@ const I18N = {
   "Wandering Merchant": "流浪商人",
   "“Ahh, a customer! Gold for goods, friend?”":"「啊，來客人了！用金幣換點貨吧，朋友？」",
   "Leave": "離開",
+  "Buy": "購買",
+  "Sold": "已售出",
   "Wildberry Potion (+3 HP)": "野莓藥水（+3 HP）",
   "Full Heal": "完全恢復",
   "Restores 3 HP on the spot.": "立即恢復3點生命值。",
@@ -1143,6 +1162,8 @@ const I18N = {
   "Wandering Merchant": "流浪商人",
   "“Ahh, a customer! Gold for goods, friend?”":"「啊，来客人了！用金币换点货吧，朋友？」",
   "Leave": "离开",
+  "Buy": "购买",
+  "Sold": "已售出",
   "Wildberry Potion (+3 HP)": "野莓药水（+3 HP）",
   "Full Heal": "完全恢复",
   "Restores 3 HP on the spot.": "立即恢复3点生命值。",
@@ -2300,6 +2321,72 @@ function hasLineOfSight(x1,y1,x2,y2){
   }
   return true;
 }
+// grid BFS (4-directional, uniform cost) from one tile to another over the current floor's
+// wall layout - used for click-to-move so a click in another room routes through doorways
+// and corridors instead of the player just sliding along a wall toward a straight-line target
+function findTilePath(startTx, startTy, goalTx, goalTy){
+  if(startTx===goalTx && startTy===goalTy) return [];
+  if(goalTx<0||goalTy<0||goalTx>=MAPW||goalTy>=MAPH||map[goalTy][goalTx]===WALL) return null;
+  const idx = (x,y)=>y*MAPW+x;
+  const visited = new Uint8Array(MAPW*MAPH);
+  const prev = new Int32Array(MAPW*MAPH).fill(-1);
+  visited[idx(startTx,startTy)] = 1;
+  const queue = [startTx, startTy];
+  let qi = 0;
+  const dirs = [1,0, -1,0, 0,1, 0,-1];
+  let found = false;
+  while(qi < queue.length){
+    const cx = queue[qi], cy = queue[qi+1]; qi+=2;
+    if(cx===goalTx && cy===goalTy){ found = true; break; }
+    for(let d=0; d<8; d+=2){
+      const nx = cx+dirs[d], ny = cy+dirs[d+1];
+      if(nx<0||ny<0||nx>=MAPW||ny>=MAPH) continue;
+      if(map[ny][nx]===WALL) continue;
+      const ni = idx(nx,ny);
+      if(visited[ni]) continue;
+      visited[ni] = 1;
+      prev[ni] = idx(cx,cy);
+      queue.push(nx,ny);
+    }
+  }
+  if(!found) return null;
+  const path = [];
+  let cur = idx(goalTx,goalTy);
+  const startI = idx(startTx,startTy);
+  while(cur!==startI){
+    path.push({x:(cur%MAPW), y:Math.floor(cur/MAPW)});
+    cur = prev[cur];
+    if(cur<0) return null;
+  }
+  path.reverse();
+  return path;
+}
+// collapses a tile-by-tile path into fewer, longer waypoints wherever a straight line between
+// two points on the path doesn't cross a wall - keeps the BFS route's detours around corners
+// but avoids the robotic "one tile at a time, only 4 directions" look during actual movement
+function smoothWorldPath(fromX, fromY, worldPts){
+  const pts = [{x:fromX,y:fromY}, ...worldPts];
+  const out = [];
+  let i = 0;
+  while(i < pts.length-1){
+    let j = pts.length-1;
+    while(j>i+1 && !hasLineOfSight(pts[i].x, pts[i].y, pts[j].x, pts[j].y)) j--;
+    out.push(pts[j]);
+    i = j;
+  }
+  return out;
+}
+// computes a walkable route from (fromX,fromY) to (toX,toY) as a list of world-space waypoints,
+// or null if the destination tile is a wall / unreachable from here
+function computeMovePath(fromX, fromY, toX, toY){
+  const stx = Math.floor(fromX/TILE), sty = Math.floor(fromY/TILE);
+  const gtx = Math.floor(toX/TILE), gty = Math.floor(toY/TILE);
+  const tilePath = findTilePath(stx, sty, gtx, gty);
+  if(tilePath===null) return null;
+  const worldPts = tilePath.map(t=>({x:(t.x+0.5)*TILE, y:(t.y+0.5)*TILE}));
+  worldPts.push({x:toX, y:toY});
+  return smoothWorldPath(fromX, fromY, worldPts);
+}
 
 /* ---------- spawning ---------- */
 function spawnFloor(){
@@ -2421,7 +2508,7 @@ function newPlayer(classId, animalId){
     baseMaxHp:BASE_MAX_HP,weapon:(cls&&cls.weapon)||"sword",armor:"traveler",
     classId: classId||null, animalId: ANIMALS[animalId] ? animalId : "bunny",
     animT:0,moving:false,hurtTimer:0,invuln:0,
-    moveDirX:1,moveDirY:0,dashT:0,dashCd:0,dashDirX:1,dashDirY:0,moveTarget:null,
+    moveDirX:1,moveDirY:0,dashT:0,dashCd:0,dashDirX:1,dashDirY:0,movePath:null,
     attackTimer:0,attackCd:0,swingAngle:0,swingHasHit:false,
     gold:0,dying:false,dieT:0,bossesDefeatedThisRun:0,cardsChosen:[],
     xp:0,level:1,xpToNext:6,pickupRadius:18,regenAccum:0,
@@ -2525,19 +2612,24 @@ function canvasToWorld(clientX, clientY){
   const scaleX = canvas.width/rect.width, scaleY = canvas.height/rect.height;
   return { x:(clientX-rect.left)*scaleX + camX, y:(clientY-rect.top)*scaleY + camY };
 }
-// left-click sets a click-to-move destination (cancelled by any WASD/joystick input, or once
-// reached - see update()); a quick second click (native dblclick) escalates to a dash aimed
-// at that same point instead of just walking there
+// left-click pathfinds a route to the clicked tile (see computeMovePath) and walks it -
+// cancelled by any WASD/joystick input, or cleared once the route is finished (see update()).
+// A quick second click (native dblclick) escalates to a simple directional dash instead - aimed
+// at the cursor relative to the player right now, a short fixed-distance burst that never
+// routes through the pathfinder, so it's an immediate "dash that way" and not a travel order
 canvas.addEventListener("mousedown", e=>{
   if(e.button!==0 || state!=="playing" || !player) return;
-  player.moveTarget = canvasToWorld(e.clientX, e.clientY);
+  const pt = canvasToWorld(e.clientX, e.clientY);
+  const dest = solidAt(pt.x,pt.y) ? nearestFloorPixel(pt.x,pt.y) : pt;
+  const path = computeMovePath(player.x, player.y, dest.x, dest.y);
+  if(path && path.length) player.movePath = path;
 });
 canvas.addEventListener("dblclick", e=>{
   if(e.button!==0 || state!=="playing" || !player) return;
   const pt = canvasToWorld(e.clientX, e.clientY);
   const ddx = pt.x-player.x, ddy = pt.y-player.y;
   const dlen = Math.hypot(ddx,ddy)||1;
-  player.moveTarget = null;
+  player.movePath = null;
   triggerDash(ddx/dlen, ddy/dlen);
 });
 
@@ -2854,12 +2946,38 @@ function buildShopOverlay(){
       `</div>`;
     const btn = document.createElement("button");
     btn.className = "shop-buy";
-    btn.textContent = offer.bought ? "Sold" : "Buy";
+    btn.textContent = offer.bought ? T("Sold") : T("Buy");
     btn.disabled = offer.bought || !afford;
     btn.addEventListener("click", ()=>buyOffer(idx));
     row.appendChild(btn);
+    // weapon/armor offers get a hover tooltip comparing them against what's currently
+    // equipped (same row-builders as the floor-pickup gear-compare prompt) - gold/potion/heal
+    // offers have nothing to "compare" against, so they don't get one
+    if(offer.kind==="weapon" || offer.kind==="armor"){
+      row.addEventListener("mouseenter", ()=>showShopTooltip(offer));
+      row.addEventListener("mouseleave", hideShopTooltip);
+    }
     list.appendChild(row);
   });
+  hideShopTooltip();
+}
+function showShopTooltip(offer){
+  const tip = document.getElementById("shopTooltip");
+  if(!tip) return;
+  let html = "";
+  if(offer.kind==="weapon"){
+    html = `<div class="compare-desc">${T(WEAPONS[offer.weapon].desc)||""}</div>` + weaponCompareRowsHTML(player.weapon, offer.weapon);
+  } else if(offer.kind==="armor"){
+    html = `<div class="compare-desc">${T(ARMOR_SETS[offer.armor].desc)||""}</div>` + armorCompareRowsHTML(player.armor, offer.armor);
+  } else {
+    return;
+  }
+  tip.innerHTML = html;
+  tip.hidden = false;
+}
+function hideShopTooltip(){
+  const tip = document.getElementById("shopTooltip");
+  if(tip) tip.hidden = true;
 }
 function buyOffer(idx){
   const offer = merchant && merchant.offers[idx];
@@ -3039,36 +3157,43 @@ function closeGearCompare(){
   showOverlay(null);
   updateTouchControls();
 }
+// shared row-builders for a weapon-vs-weapon or armor-vs-armor comparison table - used by both
+// the full gear-compare pause prompt (picking something up off the floor) and the shop's hover
+// tooltip (deciding whether to buy), so the two surfaces can never drift out of sync
+function weaponCompareRowsHTML(curKey, newKey){
+  const cur = computeEffectiveWeapon(curKey), neu = computeEffectiveWeapon(newKey);
+  return `<div class="compare-head-row"><span></span><span>${T(WEAPONS[curKey].short)}</span><span>${T(WEAPONS[newKey].short)}</span></div>` +
+    compareStatRow("Damage", fmtNum(cur.dmg), fmtNum(neu.dmg), cur.dmg, neu.dmg) +
+    compareStatRow("Range", Math.round(cur.range), Math.round(neu.range), cur.range, neu.range) +
+    compareStatRow("Attack Speed", (1/cur.cooldown).toFixed(1)+"/s", (1/neu.cooldown).toFixed(1)+"/s", 1/cur.cooldown, 1/neu.cooldown) +
+    compareStatRow("Knockback", Math.round(cur.knockback), Math.round(neu.knockback), cur.knockback, neu.knockback);
+}
+function armorCompareRowsHTML(curKey, newKey){
+  const curSet = ARMOR_SETS[curKey], newSet = ARMOR_SETS[newKey];
+  const curHp = player.baseMaxHp+(curSet.maxHpBonus||0), newHp = player.baseMaxHp+(newSet.maxHpBonus||0);
+  const curSpd = Math.round((curSet.moveSpeedMult||1)*100), newSpd = Math.round((newSet.moveSpeedMult||1)*100);
+  const curDmg = Math.round((curSet.dmgMult||1)*100), newDmg = Math.round((newSet.dmgMult||1)*100);
+  const curRegen = curSet.regenRate||0, newRegen = newSet.regenRate||0;
+  return `<div class="compare-head-row"><span></span><span>${T(curSet.short)}</span><span>${T(newSet.short)}</span></div>` +
+    compareStatRow("Max HP", curHp, newHp, curHp, newHp) +
+    compareStatRow("Move Speed", curSpd+"%", newSpd+"%", curSpd, newSpd) +
+    compareStatRow("Weapon DMG", curDmg+"%", newDmg+"%", curDmg, newDmg) +
+    compareStatRow("Regen", curRegen>0?curRegen.toFixed(2)+"/s":"—", newRegen>0?newRegen.toFixed(2)+"/s":"—", curRegen, newRegen) +
+    compareStatRow("Contact Reduction", Math.round((curSet.dmgReduction||0)*100)+"%", Math.round((newSet.dmgReduction||0)*100)+"%", curSet.dmgReduction||0, newSet.dmgReduction||0) +
+    compareStatRow("Ranged Block", curSet.hasShield?"50%":"0%", newSet.hasShield?"50%":"0%", curSet.hasShield?1:0, newSet.hasShield?1:0);
+}
 function buildGearCompareOverlay(it){
   const wrap = document.getElementById("compareWrap");
   const title = document.getElementById("gearCompareTitle");
   let html = "";
   if(it.type==="weaponPickup"){
-    const curKey = player.weapon, newKey = it.weapon;
-    const cur = computeEffectiveWeapon(curKey), neu = computeEffectiveWeapon(newKey);
-    title.textContent = Tf("Found: {0}", T(WEAPONS[newKey].name));
-    html += `<div class="compare-desc">${T(WEAPONS[newKey].desc)||""}</div>`;
-    html += `<div class="compare-head-row"><span></span><span>${T(WEAPONS[curKey].short)}</span><span>${T(WEAPONS[newKey].short)}</span></div>`;
-    html += compareStatRow("Damage", fmtNum(cur.dmg), fmtNum(neu.dmg), cur.dmg, neu.dmg);
-    html += compareStatRow("Range", Math.round(cur.range), Math.round(neu.range), cur.range, neu.range);
-    html += compareStatRow("Attack Speed", (1/cur.cooldown).toFixed(1)+"/s", (1/neu.cooldown).toFixed(1)+"/s", 1/cur.cooldown, 1/neu.cooldown);
-    html += compareStatRow("Knockback", Math.round(cur.knockback), Math.round(neu.knockback), cur.knockback, neu.knockback);
+    title.textContent = Tf("Found: {0}", T(WEAPONS[it.weapon].name));
+    html += `<div class="compare-desc">${T(WEAPONS[it.weapon].desc)||""}</div>`;
+    html += weaponCompareRowsHTML(player.weapon, it.weapon);
   } else if(it.type==="armorPickup"){
-    const curKey = player.armor, newKey = it.armor;
-    const curSet = ARMOR_SETS[curKey], newSet = ARMOR_SETS[newKey];
-    title.textContent = Tf("Found: {0}", T(newSet.name));
-    html += `<div class="compare-desc">${T(newSet.desc)||""}</div>`;
-    html += `<div class="compare-head-row"><span></span><span>${T(curSet.short)}</span><span>${T(newSet.short)}</span></div>`;
-    const curHp = player.baseMaxHp+(curSet.maxHpBonus||0), newHp = player.baseMaxHp+(newSet.maxHpBonus||0);
-    html += compareStatRow("Max HP", curHp, newHp, curHp, newHp);
-    const curSpd = Math.round((curSet.moveSpeedMult||1)*100), newSpd = Math.round((newSet.moveSpeedMult||1)*100);
-    html += compareStatRow("Move Speed", curSpd+"%", newSpd+"%", curSpd, newSpd);
-    const curDmg = Math.round((curSet.dmgMult||1)*100), newDmg = Math.round((newSet.dmgMult||1)*100);
-    html += compareStatRow("Weapon DMG", curDmg+"%", newDmg+"%", curDmg, newDmg);
-    const curRegen = curSet.regenRate||0, newRegen = newSet.regenRate||0;
-    html += compareStatRow("Regen", curRegen>0?curRegen.toFixed(2)+"/s":"—", newRegen>0?newRegen.toFixed(2)+"/s":"—", curRegen, newRegen);
-    html += compareStatRow("Contact Reduction", Math.round((curSet.dmgReduction||0)*100)+"%", Math.round((newSet.dmgReduction||0)*100)+"%", curSet.dmgReduction||0, newSet.dmgReduction||0);
-    html += compareStatRow("Ranged Block", curSet.hasShield?"50%":"0%", newSet.hasShield?"50%":"0%", curSet.hasShield?1:0, newSet.hasShield?1:0);
+    title.textContent = Tf("Found: {0}", T(ARMOR_SETS[it.armor].name));
+    html += `<div class="compare-desc">${T(ARMOR_SETS[it.armor].desc)||""}</div>`;
+    html += armorCompareRowsHTML(player.armor, it.armor);
   }
   wrap.innerHTML = html;
 }
@@ -3322,11 +3447,19 @@ function update(dt){
   if(keys["s"]||keys["arrowdown"]) my+=1;
   mx += joyVec.x; my += joyVec.y;
   if(mx!==0 || my!==0){
-    player.moveTarget = null; // any manual input cancels a pending click-to-move order
-  } else if(player.moveTarget){
-    const tdx = player.moveTarget.x-player.x, tdy = player.moveTarget.y-player.y;
-    const tdist = Math.hypot(tdx,tdy);
-    if(tdist < 6) player.moveTarget = null;
+    player.movePath = null; // any manual input cancels a pending click-to-move route
+  } else if(player.movePath && player.movePath.length){
+    // walk toward the next waypoint on the path; once close enough, advance to the next
+    // one (or clear the path entirely once the last waypoint is reached)
+    let wp = player.movePath[0];
+    let tdx = wp.x-player.x, tdy = wp.y-player.y, tdist = Math.hypot(tdx,tdy);
+    while(tdist < 6 && player.movePath.length){
+      player.movePath.shift();
+      if(!player.movePath.length) break;
+      wp = player.movePath[0];
+      tdx = wp.x-player.x; tdy = wp.y-player.y; tdist = Math.hypot(tdx,tdy);
+    }
+    if(!player.movePath || !player.movePath.length) player.movePath = null;
     else { mx = tdx/tdist; my = tdy/tdist; }
   }
   const rawLen = Math.hypot(mx,my);
@@ -3974,7 +4107,7 @@ function render(){
     else if(d.e) drawCreature(ctx, d.e.type, d.e, 0, 0);
     else if(d.m) drawCreature(ctx, "merchant", d.m, 0, 0);
     else if(d.tc) renderTorchFixture(d.tc);
-    else if(d.p) drawCreature(ctx, "player", d.p, 0, 0);
+    else if(d.p){ drawCreature(ctx, "player", d.p, 0, 0); renderDashCooldownRing(d.p); }
   }
   renderTorchGlow();
   renderProjectiles();
@@ -4178,6 +4311,34 @@ function drawWeaponIcon(ctx, type){
     ctx.fillStyle=COL.metalDark; fillSoftRect(ctx,-6,0,12,4);
   }
 }
+// a small ring at the player's feet showing dash cooldown - a dark wedge covers the portion
+// still cooling down and shrinks away as it recovers; once ready it flashes to a bright outline
+function renderDashCooldownRing(p){
+  if(!p || p.dying) return;
+  const r = 8, cx = p.x, cy = p.y + p.radius + 7;
+  const frac = clamp((p.dashCd||0)/DASH_COOLDOWN, 0, 1);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.fillStyle = "rgba(58,40,20,0.4)";
+  ctx.fill();
+  if(frac>0.001){
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + Math.PI*2*frac);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(20,14,10,0.65)";
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.strokeStyle = "#f5b942";
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.9;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 function renderParticles(){
   if(!Array.isArray(particles)) return;
   for(const p of particles){
@@ -4226,6 +4387,7 @@ function heartShape(cx,cy,s,filled){
   }
 }
 function renderHUDCanvas(){
+  dashBtn.style.setProperty("--cd", player? clamp((player.dashCd||0)/DASH_COOLDOWN,0,1) : 0);
   hctx.clearRect(0,0,heartsCanvas.width,heartsCanvas.height);
   const hp = player? player.hp : BASE_MAX_HP, maxhp = player? player.maxhp : BASE_MAX_HP;
   const n = maxhp;
