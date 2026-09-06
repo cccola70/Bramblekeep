@@ -81,6 +81,13 @@
   .is-touch .hud, .is-touch .loadout, .is-touch .quest-tracker,
   .is-touch .xplabel, .is-touch .xpbar-wrap, .is-touch .below,
   .is-touch .touch-controls-bar{ flex:none; }
+  /* the HUD (hearts/floor/gold/loadout/quest tracker/xp) moves above the game view on
+     mobile - out of the thumb zone at the bottom and always visible - while the canvas and
+     the bottom controls keep their place. Flex "order" does this without touching DOM
+     structure or the desktop layout: these are the only items pulled before the canvas
+     (order 0 by default), so they land above it; everything else stays in source order. */
+  .is-touch .hud, .is-touch .loadout, .is-touch .quest-tracker,
+  .is-touch .xplabel, .is-touch .xpbar-wrap{ order:-1; }
   .is-touch .touch-controls-bar{ padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px)); }
 
   .titlebar{
@@ -123,24 +130,34 @@
     touch-action:none;
   }
 
-  /* Touch controls (joystick + dash) live in their own row below the whole HUD stack -
-     not floating on top of the game view - so they never obscure the dungeon and always
-     sit in the same easy-to-reach spot regardless of what's happening on screen. Their
-     sizes here are the 100%-scale base; settings-controlled resizing (see applyTouchScale)
-     multiplies these via inline style, so the CSS values below are just the starting point. */
+  /* Touch controls live in their own row below the whole HUD stack - not floating on top of
+     the game view - so they never obscure the dungeon. Each half is a big "zone" rather than
+     a small fixed widget: the joystick and dash button appear wherever the player's thumb
+     actually lands within their zone (see moveZone/dashZone in the script), so there's no
+     need to find a tiny fixed target - just touch down anywhere on your side. Sizes here are
+     the 100%-scale base; settings-controlled resizing (see applyTouchScale) multiplies these
+     via inline style, so the CSS values below are just the starting point. */
   .touch-controls-bar{
     display:flex;
-    align-items:center;
+    align-items:stretch;
     justify-content:space-between;
     gap:16px;
     padding:10px 18px;
+    height:150px;
     border-top:2px solid rgba(58,43,63,.1);
     margin-top:2px;
   }
   .touch-controls-bar[hidden]{ display:none; }
+  .touch-zone{
+    position:relative;
+    flex:1;
+    touch-action:none;
+  }
   .joystick{
-    flex:none;
+    position:absolute;
+    left:0; top:0;
     width:104px; height:104px;
+    margin:-52px 0 0 -52px;
     touch-action:none;
     -webkit-user-select:none; user-select:none;
   }
@@ -164,8 +181,10 @@
   }
 
   .dashbtn{
-    flex:none;
+    position:absolute;
+    left:0; top:0;
     width:64px; height:64px;
+    margin:-32px 0 0 -32px;
     border-radius:50%;
     --cd:0;
     background:
@@ -180,9 +199,9 @@
     touch-action:none;
     -webkit-user-select:none; user-select:none;
     display:flex; align-items:center; justify-content:center;
-    transition:transform .08s ease, opacity .12s ease;
+    transition:transform .1s ease;
   }
-  .dashbtn:active{ transform:scale(0.9); }
+  .dashbtn.tapped{ transform:scale(1.15); }
 
   .overlay{
     position:absolute; inset:0;
@@ -944,13 +963,18 @@
     </span>
   </div>
   <!-- Touch controls sit below the whole HUD stack (not floating on the game view) so they
-       never cover the dungeon and stay in one predictable, easy-to-reach spot - see
-       updateTouchControls() and applyTouchScale(). -->
+       never cover the dungeon and stay in one predictable spot. Each half is a big tap/drag
+       zone: the joystick and dash button appear right where the thumb actually lands within
+       its zone instead of at one small fixed spot - see moveZone/dashZone in the script. -->
   <div class="touch-controls-bar" id="touchControlsBar" hidden>
-    <div class="joystick" id="joystick">
-      <div class="joybase"><div class="joyknob" id="joyknob"></div></div>
+    <div class="touch-zone" id="moveZone">
+      <div class="joystick" id="joystick" hidden>
+        <div class="joybase"><div class="joyknob" id="joyknob"></div></div>
+      </div>
     </div>
-    <button type="button" class="dashbtn" id="dashBtn" data-i18n>DASH</button>
+    <div class="touch-zone" id="dashZone">
+      <button type="button" class="dashbtn" id="dashBtn" hidden data-i18n>DASH</button>
+    </div>
   </div>
   <pre id="debugbox"></pre>
 </div>
@@ -1050,10 +1074,10 @@ const I18N = {
   // -- howto --
   "How to Play": "遊戲玩法",
   "Move with <b>WASD</b>, arrow keys, or left-click to walk there<span class=\"sub\">or drag the joystick on touch screens</span>": "使用 <b>WASD</b>、方向鍵，或點擊左鍵走到該處<span class=\"sub\">觸控裝置可拖曳搖桿移動</span>",
-  "Drag the joystick to move<span class=\"sub\">it appears bottom-left once you start</span>": "拖曳搖桿以移動<span class=\"sub\">開始遊戲後會出現在左下角</span>",
+  "Touch and drag anywhere on the left to move<span class=\"sub\">a joystick appears right under your thumb</span>": "在左側觸碰並拖曳以移動<span class=\"sub\">搖桿會直接出現在你的拇指下方</span>",
   "Get close and you <b>attack automatically</b><span class=\"sub\">no attack button - range and arc depend on your weapon</span>": "靠近敵人即會<b>自動攻擊</b><span class=\"sub\">沒有攻擊鍵，攻擊距離與範圍取決於你的武器</span>",
   "<b>Space, double-click, or the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "按<b>空白鍵、滑鼠左鍵點兩下或衝刺鍵</b>來衝刺<span class=\"sub\">短暫無敵的快速位移，很適合欺身接近遠程敵人</span>",
-  "<b>Tap the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "點按<b>衝刺鍵</b>來衝刺<span class=\"sub\">短暫無敵的快速位移，很適合欺身接近遠程敵人</span>",
+  "<b>Tap anywhere on the right</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "在右側<b>任意處點按</b>即可衝刺<span class=\"sub\">短暫無敵的快速位移，很適合欺身接近遠程敵人</span>",
   "Find the <b>glowing stairs</b> to descend<span class=\"sub\">15 floors, 3 realms, each with a boss - merchants sell weapons, armor &amp; potions along the way</span>": "找到<b>發光的樓梯</b>以下樓<span class=\"sub\">共15層、3個領域，每個領域皆有首領－商人會沿途販售武器、護甲與藥水</span>",
   "Press <b>I</b> or the backpack button for your <b>hero &amp; gear</b> screen<span class=\"sub\">stats, equipment, and every ability you've picked</span>": "按下 <b>I</b> 鍵或背包鍵開啟<b>英雄與裝備</b>畫面<span class=\"sub\">查看數值、裝備，以及你選擇過的每個能力</span>",
   "Tap the backpack button for your <b>hero &amp; gear</b> screen<span class=\"sub\">stats, equipment, and every ability you've picked</span>": "點按背包鍵開啟<b>英雄與裝備</b>畫面<span class=\"sub\">查看數值、裝備，以及你選擇過的每個能力</span>",
@@ -1272,10 +1296,10 @@ const I18N = {
   // -- howto --
   "How to Play": "游戏玩法",
   "Move with <b>WASD</b>, arrow keys, or left-click to walk there<span class=\"sub\">or drag the joystick on touch screens</span>": "使用 <b>WASD</b>、方向键，或点击左键走到该处<span class=\"sub\">触控设备可拖动摇杆移动</span>",
-  "Drag the joystick to move<span class=\"sub\">it appears bottom-left once you start</span>": "拖动摇杆以移动<span class=\"sub\">开始游戏后会出现在左下角</span>",
+  "Touch and drag anywhere on the left to move<span class=\"sub\">a joystick appears right under your thumb</span>": "在左侧触碰并拖动以移动<span class=\"sub\">摇杆会直接出现在你的拇指下方</span>",
   "Get close and you <b>attack automatically</b><span class=\"sub\">no attack button - range and arc depend on your weapon</span>": "靠近敌人即会<b>自动攻击</b><span class=\"sub\">没有攻击键，攻击距离与范围取决于你的武器</span>",
   "<b>Space, double-click, or the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "按<b>空格键、鼠标左键点两下或冲刺键</b>来冲刺<span class=\"sub\">短暂无敌的快速位移，很适合欺身接近远程敌人</span>",
-  "<b>Tap the DASH button</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "点按<b>冲刺键</b>来冲刺<span class=\"sub\">短暂无敌的快速位移，很适合欺身接近远程敌人</span>",
+  "<b>Tap anywhere on the right</b> to dash<span class=\"sub\">a quick invulnerable burst - great for closing in on ranged enemies</span>": "在右侧<b>任意处点按</b>即可冲刺<span class=\"sub\">短暂无敌的快速位移，很适合欺身接近远程敌人</span>",
   "Find the <b>glowing stairs</b> to descend<span class=\"sub\">15 floors, 3 realms, each with a boss - merchants sell weapons, armor &amp; potions along the way</span>": "找到<b>发光的楼梯</b>以下楼<span class=\"sub\">共15层、3个领域，每个领域皆有首领－商人会沿途贩售武器、护甲与药水</span>",
   "Press <b>I</b> or the backpack button for your <b>hero &amp; gear</b> screen<span class=\"sub\">stats, equipment, and every ability you've picked</span>": "按下 <b>I</b> 键或背包键开启<b>英雄与装备</b>画面<span class=\"sub\">查看数值、装备，以及你选择过的每个能力</span>",
   "Tap the backpack button for your <b>hero &amp; gear</b> screen<span class=\"sub\">stats, equipment, and every ability you've picked</span>": "点按背包键开启<b>英雄与装备</b>画面<span class=\"sub\">查看数值、装备，以及你选择过的每个能力</span>",
@@ -3873,37 +3897,50 @@ fitCanvas();
 function localizeHowtoForDevice(){
   if(!isTouchDevice) return;
   document.getElementById("moveHowtoIcon").innerHTML = '<div class="mini-joy"></div>';
-  document.getElementById("moveHowtoText").innerHTML = 'Drag the joystick to move<span class="sub">it appears bottom-left once you start</span>';
-  document.getElementById("dashHowtoText").innerHTML = '<b>Tap the DASH button</b> to dash<span class="sub">a quick invulnerable burst - great for closing in on ranged enemies</span>';
+  document.getElementById("moveHowtoText").innerHTML = 'Touch and drag anywhere on the left to move<span class="sub">a joystick appears right under your thumb</span>';
+  document.getElementById("dashHowtoText").innerHTML = '<b>Tap anywhere on the right</b> to dash<span class="sub">a quick invulnerable burst - great for closing in on ranged enemies</span>';
   document.getElementById("invHowtoText").innerHTML = 'Tap the backpack button for your <b>hero &amp; gear</b> screen<span class="sub">stats, equipment, and every ability you\'ve picked</span>';
   document.getElementById("howtoBottomHint").textContent = "Tap to choose on every screen.";
 }
 localizeHowtoForDevice();
 const touchControlsBar = document.getElementById("touchControlsBar");
+const moveZone = document.getElementById("moveZone");
+const dashZone = document.getElementById("dashZone");
 const joystick = document.getElementById("joystick");
 const joyknob = document.getElementById("joyknob");
 let joyVec = {x:0,y:0}, joyActive = false, joyPointerId = null, joyCenter = {x:0,y:0};
 const JOY_RADIUS_BASE = 40;
 let JOY_RADIUS = JOY_RADIUS_BASE;
 const dashBtn = document.getElementById("dashBtn");
-dashBtn.addEventListener("pointerdown", e=>{ e.preventDefault(); triggerDash(); });
+let dashFlashTimer = null;
+// current on-screen sizes (updated by applyTouchScale) - used both for the CSS box size and
+// for clamping where a floating control is allowed to appear within its zone (see placeInZone)
+let joySizePx = 104, dashSizePx = 64;
 // scales the joystick/dash button (and the drag radius that matches the joystick's own size)
 // from the settings menu's "Control Size" slider - base sizes below match the CSS defaults
 function applyTouchScale(scale){
   touchScale = clamp(scale, 0.8, 1.4);
-  const joySize = Math.round(104*touchScale), knobSize = Math.round(42*touchScale);
-  joystick.style.width = joySize+"px"; joystick.style.height = joySize+"px";
+  joySizePx = Math.round(104*touchScale);
+  const knobSize = Math.round(42*touchScale);
+  joystick.style.width = joySizePx+"px"; joystick.style.height = joySizePx+"px";
+  joystick.style.margin = (-joySizePx/2)+"px 0 0 "+(-joySizePx/2)+"px";
   joyknob.style.width = knobSize+"px"; joyknob.style.height = knobSize+"px";
   joyknob.style.margin = (-knobSize/2)+"px 0 0 "+(-knobSize/2)+"px";
-  const dashSize = Math.round(64*touchScale);
-  dashBtn.style.width = dashSize+"px"; dashBtn.style.height = dashSize+"px";
+  dashSizePx = Math.round(64*touchScale);
+  dashBtn.style.width = dashSizePx+"px"; dashBtn.style.height = dashSizePx+"px";
+  dashBtn.style.margin = (-dashSizePx/2)+"px 0 0 "+(-dashSizePx/2)+"px";
   JOY_RADIUS = JOY_RADIUS_BASE*touchScale;
   try{ localStorage.setItem("bramble_touchscale", touchScale); }catch(e){}
 }
 applyTouchScale(touchScale);
 
 function updateTouchControls(){
-  touchControlsBar.hidden = !(isTouchDevice && state==="playing");
+  const shouldShow = isTouchDevice && state==="playing";
+  // an overlay popping up mid-drag (a level-up, a boss clear, opening the inventory...)
+  // hides the whole bar - reset any in-progress drag too, so a stale joystick doesn't just
+  // reappear at its last position next time the bar comes back without a fresh touch
+  if(!shouldShow && joyActive) joyReset();
+  touchControlsBar.hidden = !shouldShow;
 }
 // on a resize/rotation, refit the canvas to the device's (possibly now-different) screen
 // size before re-checking joystick/dash visibility
@@ -3911,6 +3948,21 @@ function handleViewportResize(){ fitCanvas(); updateTouchControls(); }
 window.addEventListener("resize", handleViewportResize);
 window.addEventListener("orientationchange", handleViewportResize);
 
+// centers a floating control (the joystick or the dash button) on the touch point, clamped
+// so the whole control stays inside its zone - or just centered in the zone if the zone is
+// ever too small for the control to fully fit. Returns the chosen center in page coordinates.
+function placeInZone(zone, controlSize, clientX, clientY){
+  const rect = zone.getBoundingClientRect();
+  const half = controlSize/2;
+  const localX = rect.width < controlSize ? rect.width/2 : clamp(clientX-rect.left, half, rect.width-half);
+  const localY = rect.height < controlSize ? rect.height/2 : clamp(clientY-rect.top, half, rect.height-half);
+  return { x: rect.left+localX, y: rect.top+localY, localX, localY };
+}
+// moves the knob toward the touch point, capped at JOY_RADIUS from the joystick's center -
+// capping the KNOB's travel is purely visual. The direction vector's magnitude also caps at
+// 1 once the drag reaches JOY_RADIUS, but never drops back down for a larger drag: dragging
+// the thumb well past the ring still registers full-speed movement in that direction instead
+// of stopping partway or requiring the thumb to stay within the visible circle.
 function joyMove(clientX, clientY){
   let dx = clientX - joyCenter.x, dy = clientY - joyCenter.y;
   const dist = Math.hypot(dx,dy);
@@ -3925,25 +3977,51 @@ function joyReset(){
   joyActive = false; joyPointerId = null;
   joyVec = {x:0,y:0};
   joyknob.style.transform = "translate(0,0)";
+  joystick.hidden = true;
 }
-joystick.addEventListener("pointerdown", e=>{
+// the joystick is "floating": it's hidden until the player actually touches down inside
+// moveZone, at which point it appears centered on that exact spot (see placeInZone) instead
+// of living at one fixed location - so there's nothing to precisely find with a thumb, just
+// touch down anywhere on your side of the controls. Pointer capture is taken on the zone
+// itself (not the small joystick element) so dragging continues to be tracked correctly no
+// matter how far outside the control - or the zone - the thumb travels before lifting.
+moveZone.addEventListener("pointerdown", e=>{
   joyActive = true; joyPointerId = e.pointerId;
-  const rect = joystick.getBoundingClientRect();
-  joyCenter = {x:rect.left+rect.width/2, y:rect.top+rect.height/2};
-  try{ joystick.setPointerCapture(e.pointerId); }catch(err){}
+  const p = placeInZone(moveZone, joySizePx, e.clientX, e.clientY);
+  joyCenter = {x:p.x, y:p.y};
+  joystick.style.left = p.localX+"px";
+  joystick.style.top = p.localY+"px";
+  joystick.hidden = false;
+  joyknob.style.transform = "translate(0,0)";
+  try{ moveZone.setPointerCapture(e.pointerId); }catch(err){}
   joyMove(e.clientX, e.clientY);
   e.preventDefault();
 });
-joystick.addEventListener("pointermove", e=>{
+moveZone.addEventListener("pointermove", e=>{
   if(!joyActive || e.pointerId!==joyPointerId) return;
   joyMove(e.clientX, e.clientY);
   e.preventDefault();
 });
 ["pointerup","pointercancel","pointerleave"].forEach(evt=>{
-  joystick.addEventListener(evt, e=>{
+  moveZone.addEventListener(evt, e=>{
     if(e.pointerId!==joyPointerId) return;
     joyReset();
   });
+});
+// dash is a tap, not a drag, but it's just as "floating" as the joystick: the button pops up
+// right under wherever the thumb lands in dashZone (instead of a small fixed target), flashes
+// briefly for feedback, then hides again - the whole zone is live, the visible circle is only
+// feedback, not a hit target that has to be found precisely
+dashZone.addEventListener("pointerdown", e=>{
+  const p = placeInZone(dashZone, dashSizePx, e.clientX, e.clientY);
+  dashBtn.style.left = p.localX+"px";
+  dashBtn.style.top = p.localY+"px";
+  dashBtn.hidden = false;
+  dashBtn.classList.add("tapped");
+  clearTimeout(dashFlashTimer);
+  dashFlashTimer = setTimeout(()=>{ dashBtn.hidden = true; dashBtn.classList.remove("tapped"); }, 260);
+  triggerDash();
+  e.preventDefault();
 });
 
 refreshTitleStats();
