@@ -1648,8 +1648,11 @@ function tonesFrom(hex){
 // hex -> "rgba(r,g,b,a)" so a flat palette color can be used translucently (glows, blush,
 // slime bodies) without hand-writing a second rgba literal for every tone
 function hexA(hex, a){
-  if(!hex || hex[0]!=="#") return hex;
+  // addColorStop rejects anything it cannot parse and throws, which would take down the
+  // entire render loop - so an unusable color degrades to neutral grey rather than crashing
+  if(typeof hex!=="string" || hex[0]!=="#" || hex.length!==7) return "rgba(136,136,136,"+a+")";
   const n = parseInt(hex.slice(1),16);
+  if(!Number.isFinite(n)) return "rgba(136,136,136,"+a+")";
   return "rgba("+((n>>16)&255)+","+((n>>8)&255)+","+(n&255)+","+a+")";
 }
 
@@ -1763,7 +1766,11 @@ const COL = {
   bat:"#8a6bb0", batDark:"#5f4783", fang:"#fff",
   rat:"#b58a63", ratDark:"#8a6748", tail:"#c79b74",
   ghost:"#e7defb", ghostDark:"#c9b8ee",
-  boss:"#a558c9", bossDark:"#7a3c9c", crown:"#f5b942"
+  boss:"#a558c9", bossDark:"#7a3c9c", crown:"#f5b942",
+  // referenced by the stairs glow, the gold/potion pickups and their particle bursts.
+  // These were missing for a long time and went unnoticed because an invalid ctx.fillStyle
+  // is silently ignored - those draws just inherited whatever color came before them.
+  amber:"#f5b942", moss:"#8fd694"
 };
 
 /* ---------- weapons ---------- */
