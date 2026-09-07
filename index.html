@@ -145,6 +145,17 @@
     text-align:center;
   }
   .boss-bar[hidden]{ display:none; }
+  .combo-badge{
+    position:absolute; top:10px; right:10px;
+    pointer-events:none; text-align:right;
+    font-family:"Silkscreen",monospace; font-weight:700;
+    color:var(--amber); text-shadow:0 2px 0 rgba(0,0,0,.55), 0 0 10px rgba(0,0,0,.5);
+    opacity:0; transform:scale(.8);
+    transition:opacity .12s ease, transform .12s ease;
+  }
+  .combo-badge.show{ opacity:1; transform:scale(1); }
+  .combo-badge .combo-n{ font-size:20px; }
+  .combo-badge .combo-label{ font-size:9px; letter-spacing:.08em; text-transform:uppercase; display:block; margin-top:-2px; }
   .boss-bar-name{
     font-family:"Silkscreen",monospace; font-weight:700; font-size:12px;
     letter-spacing:.06em; text-transform:uppercase;
@@ -288,6 +299,38 @@
   button.playbtn:active{ transform:translateY(3px); box-shadow:0 1px 0 var(--coral-dark), 0 2px 6px rgba(0,0,0,.3); }
   button.playbtn:focus-visible{ outline:3px solid var(--parchment); outline-offset:2px; }
   .hint{font-size:11px; color:var(--lavender); opacity:.85;}
+
+  button.playbtn.daily-btn{
+    background:var(--amber); box-shadow:0 4px 0 #b98a1f, 0 6px 10px rgba(0,0,0,.35);
+  }
+  button.playbtn.daily-btn:active{ box-shadow:0 1px 0 #b98a1f, 0 2px 6px rgba(0,0,0,.3); }
+  button.playbtn.daily-btn:disabled{
+    background:rgba(246,236,217,.14); color:var(--lavender); box-shadow:none; cursor:default;
+  }
+  #dailyHint{ margin-top:-4px; }
+  .daily-name-row{
+    display:flex; gap:8px; align-items:center; width:100%; max-width:300px;
+  }
+  .daily-name-row input{
+    flex:1; min-width:0;
+    font-family:"Baloo 2",sans-serif; font-size:13px; font-weight:700;
+    color:var(--ink); background:var(--parchment); border:2px solid var(--stone-dark);
+    border-radius:999px; padding:7px 14px;
+  }
+  .daily-name-row input:focus-visible{ outline:3px solid var(--amber); outline-offset:1px; }
+  .daily-name-row button{ flex:none; padding:8px 16px; font-size:12px; }
+  .leaderboard{
+    display:flex; flex-direction:column; gap:4px; width:100%; max-width:300px;
+    font-size:12px; color:var(--lavender); min-height:14px;
+  }
+  .leaderboard-row{
+    display:flex; align-items:center; gap:8px;
+    background:rgba(246,236,217,.08); border-radius:8px; padding:5px 10px;
+    font-family:"Silkscreen", monospace; font-size:11px;
+  }
+  .leaderboard-row .lb-rank{ color:var(--amber); width:2.2em; flex:none; }
+  .leaderboard-row .lb-name{ flex:1; text-align:left; color:var(--parchment); font-family:"Baloo 2",sans-serif; font-weight:700; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .leaderboard-row .lb-score{ color:var(--amber); font-variant-numeric:tabular-nums; }
 
   .lang-row{ display:flex; gap:6px; justify-content:center; margin:-4px 0 2px; }
   .lang-btn{
@@ -825,6 +868,13 @@
       <div class="boss-bar-track"><div class="boss-bar-fill" id="bossBarFill"></div></div>
     </div>
 
+    <!-- kill-streak combo counter - see updateKillStreak(). Shows from 2 kills in a row,
+         fades out once the streak's decay window (streakTimer) runs out. -->
+    <div class="combo-badge" id="comboBadge">
+      <span class="combo-n" id="comboN">x2</span>
+      <span class="combo-label" data-i18n>Combo</span>
+    </div>
+
     <!-- Touch controls overlay the game view itself - the whole left half is a "move" zone,
          the whole right half a "dash" zone, invisible until the player actually touches down
          inside, at which point the joystick/dash button appears centered right under that
@@ -855,6 +905,8 @@
       <div class="shards-line">◆ <span id="titleShards">0</span> <span data-i18n>Shards</span></div>
       <button class="playbtn" id="btnResumeRun" hidden><span data-i18n>Continue Run &mdash; Floor</span> <span id="resumeFloor">1</span></button>
       <button class="playbtn" id="btnStart" data-i18n>Start Adventure</button>
+      <button class="playbtn daily-btn" id="btnDaily" data-i18n>Daily Challenge</button>
+      <p class="hint" id="dailyHint"></p>
       <div class="title-secondary-row">
         <button class="secondarybtn" id="btnUpgradesTitle" data-i18n>Skill Trees</button>
         <button class="secondarybtn" id="btnSettingsTitle" data-i18n>Settings</button>
@@ -970,6 +1022,22 @@
       <button class="secondarybtn" id="btnUpgradesWin" data-i18n>Skill Trees</button>
     </div>
 
+    <div class="overlay" id="ov-daily-result" hidden>
+      <h1 data-i18n>Daily Challenge Complete</h1>
+      <p id="dailyResultMsg">You reached floor 1 with 0 gold.</p>
+      <div class="stat-row">
+        <div><span class="label" data-i18n>Today's Score</span><span class="value" id="dailyScore">0</span></div>
+        <div><span class="label" data-i18n>Your Best</span><span class="value" id="dailyBest">0</span></div>
+      </div>
+      <p class="hint" id="dailyNewBest" hidden data-i18n>New personal best!</p>
+      <div class="daily-name-row" id="dailyNameRow" hidden>
+        <input type="text" id="dailyNameInput" maxlength="16" data-i18n-placeholder placeholder="Your name">
+        <button class="secondarybtn" id="btnDailySubmit" data-i18n>Submit Score</button>
+      </div>
+      <div class="leaderboard" id="dailyLeaderboard"></div>
+      <button class="playbtn" id="btnDailyClose" data-i18n>Back to Title</button>
+    </div>
+
     <div class="overlay" id="ov-bossclear" hidden>
       <h1 id="bossClearTitle">Boss Defeated!</h1>
       <p data-i18n>Push on to the next realm, or bank your gold as shards and return to Bramblekeep.</p>
@@ -1066,6 +1134,10 @@ function applyStaticI18n(){
     if(el.dataset.i18nOrigTitle==null) el.dataset.i18nOrigTitle = el.getAttribute("title")||"";
     el.setAttribute("title", T(el.dataset.i18nOrigTitle));
   });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el=>{
+    if(el.dataset.i18nOrigPlaceholder==null) el.dataset.i18nOrigPlaceholder = el.getAttribute("placeholder")||"";
+    el.setAttribute("placeholder", T(el.dataset.i18nOrigPlaceholder));
+  });
   document.querySelectorAll("[data-i18n-aria]").forEach(el=>{
     if(el.dataset.i18nOrigAria==null) el.dataset.i18nOrigAria = el.getAttribute("aria-label")||"";
     el.setAttribute("aria-label", T(el.dataset.i18nOrigAria));
@@ -1101,6 +1173,21 @@ const I18N = {
   "Shards": "碎片",
   "Continue Run — Floor":"繼續冒險－樓層",
   "Start Adventure": "開始冒險",
+  "Combo": "連擊",
+  "Daily Challenge": "每日挑戰",
+  "Today's challenge ({0}) complete - come back tomorrow!": "今日挑戰（{0}）已完成－明天再來！",
+  "Same seed for everyone today ({0}) - one attempt": "今天所有人都是同一個地牢種子（{0}）－僅限一次",
+  "Today's Challenge: {0} {1}": "今日挑戰：{0} {1}",
+  "Daily Challenge Complete": "每日挑戰完成",
+  "Your {0} reached floor {1} with {2} gold.": "你的{0}抵達第{1}層，帶著{2}金幣。",
+  "Today's Score": "今日分數",
+  "Your Best": "個人最佳",
+  "New personal best!": "個人最佳紀錄！",
+  "Submit Score": "送出分數",
+  "Your name": "你的名字",
+  "Loading leaderboard...": "排行榜載入中…",
+  "No scores yet today - be the first!": "今天還沒有分數－搶頭香！",
+  "Back to Title": "返回標題",
   "Skill Trees": "技能樹",
   "Move: WASD / Arrows &nbsp;·&nbsp; Attack automatically in range": "移動：WASD／方向鍵 &nbsp;·&nbsp; 進入範圍自動攻擊",
   "Lv.": "等級",
@@ -1328,6 +1415,21 @@ const I18N = {
   "Shards": "碎片",
   "Continue Run — Floor":"继续冒险－楼层",
   "Start Adventure": "开始冒险",
+  "Combo": "连击",
+  "Daily Challenge": "每日挑战",
+  "Today's challenge ({0}) complete - come back tomorrow!": "今日挑战（{0}）已完成－明天再来！",
+  "Same seed for everyone today ({0}) - one attempt": "今天所有人都是同一个地牢种子（{0}）－仅限一次",
+  "Today's Challenge: {0} {1}": "今日挑战：{0} {1}",
+  "Daily Challenge Complete": "每日挑战完成",
+  "Your {0} reached floor {1} with {2} gold.": "你的{0}抵达第{1}层，带着{2}金币。",
+  "Today's Score": "今日分数",
+  "Your Best": "个人最佳",
+  "New personal best!": "个人最佳纪录！",
+  "Submit Score": "提交分数",
+  "Your name": "你的名字",
+  "Loading leaderboard...": "排行榜加载中…",
+  "No scores yet today - be the first!": "今天还没有分数－抢头香！",
+  "Back to Title": "返回标题",
   "Skill Trees": "技能树",
   "Move: WASD / Arrows &nbsp;·&nbsp; Attack automatically in range": "移动：WASD／方向键 &nbsp;·&nbsp; 进入范围自动攻击",
   "Lv.": "等级",
@@ -1556,6 +1658,37 @@ const lerp = (a,b,t)=>a+(b-a)*t;
 const choice = arr=>arr[Math.floor(Math.random()*arr.length)];
 const dist2 = (ax,ay,bx,by)=>{const dx=ax-bx,dy=ay-by; return dx*dx+dy*dy;};
 
+/* ---------- seeded RNG (for the Daily Challenge - see startDailyGame) ----------
+   Every random draw in the game (rand/randi/choice above, plus the many direct
+   Math.random() calls in map/enemy/loot generation) ultimately reads Math.random(), so
+   swapping that one function during a daily run makes an entire floor's layout - rooms,
+   enemy placement, loot - reproduce identically for every player who plays that day,
+   without having to hunt down and thread a generator through dozens of call sites. */
+const nativeRandom = Math.random.bind(Math);
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashSeed(str){
+  let h = 1779033703 ^ str.length;
+  for(let i=0;i<str.length;i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return (h ^ (h>>>16)) >>> 0;
+}
+function todayKey(){
+  const d = new Date();
+  return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0");
+}
+let usingSeededRandom = false;
+function beginDailySeed(){ Math.random = mulberry32(hashSeed("bramblekeep-daily-"+todayKey())); usingSeededRandom = true; }
+function endDailySeed(){ Math.random = nativeRandom; usingSeededRandom = false; }
+
 /* ---------- audio (tiny synth, no assets) ---------- */
 const NOTE = m => m==null ? null : 440*Math.pow(2,(m-69)/12); // MIDI note number -> Hz
 const Audio1 = (()=>{
@@ -1621,6 +1754,10 @@ const Audio1 = (()=>{
   let musicMuted=false, musicVolume=0.5, musicBus=null;
   let trackKey=null, track=null, stepIndex=0, nextStepTime=0;
   const SCHEDULE_AHEAD = 0.2; // seconds of notes kept queued up at any time
+  // 0..1, driven every frame from nearby-enemy-count + kill-streak (see updateIntensity in the
+  // game code) - makes the current track hit harder instead of swapping in a whole separate
+  // percussion track per biome, which would mean authoring 17 more note arrays by hand
+  let intensity = 0;
   function bus(){
     const c = ensure(); if(!c) return null;
     if(!musicBus){ musicBus = c.createGain(); musicBus.gain.value = musicMuted?0:musicVolume; musicBus.connect(c.destination); }
@@ -1637,11 +1774,35 @@ const Audio1 = (()=>{
     osc.connect(g); g.connect(bus());
     osc.start(t); osc.stop(t+dur+0.02);
   }
+  // a percussive tick on the music bus (so it obeys musicMuted/musicVolume, not the SFX
+  // volume) - shares the same noise buffer noiseBurst() builds for footsteps/ambient, lazily
+  // creating it here too in case music starts ticking before any SFX has
+  function musicTick(c, t, gain){
+    if(!noiseBuffer){
+      noiseBuffer = c.createBuffer(1, c.sampleRate*0.5, c.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for(let i=0;i<data.length;i++) data[i] = Math.random()*2-1;
+    }
+    const src = c.createBufferSource();
+    src.buffer = noiseBuffer;
+    const filt = c.createBiquadFilter();
+    filt.type = "highpass"; filt.frequency.value = 6500;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0005,gain), t+0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+0.045);
+    src.connect(filt); filt.connect(g); g.connect(bus());
+    src.start(t); src.stop(t+0.07);
+  }
   function scheduleStep(c, i, t){
+    const boost = 1 + intensity*0.4; // louder, more present bass/lead as things heat up
     const bassNote = track.bass[i % track.bass.length];
-    playNote(c, bassNote, t, track.step*0.92, track.bassType||"triangle", track.bassGain!=null?track.bassGain:0.11);
+    playNote(c, bassNote, t, track.step*0.92, track.bassType||"triangle", (track.bassGain!=null?track.bassGain:0.11)*boost);
     const leadNote = track.lead[i % track.lead.length];
-    playNote(c, leadNote, t, track.step*0.8, track.leadType||"square", track.leadGain!=null?track.leadGain:0.05);
+    playNote(c, leadNote, t, track.step*0.8, track.leadType||"square", (track.leadGain!=null?track.leadGain:0.05)*boost);
+    // an extra percussive hi-hat-style tick riding the same step grid once intensity climbs -
+    // a live "it's getting more intense" layer without a whole authored percussion track
+    if(intensity>0.12) musicTick(c, t, 0.05*intensity);
   }
   // called every frame regardless of game state - cheap when there's nothing new to queue
   function tickMusic(){
@@ -1687,6 +1848,15 @@ const Audio1 = (()=>{
     dead: ()=>{[300,260,220,160].forEach((f,i)=>setTimeout(()=>tone(f,0.22,"sawtooth",0.12),i*140));},
     win: ()=>{[523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,0.2,"triangle",0.14),i*130));},
     boss: (pan)=>{tone(90,0.4,"sawtooth",0.16,60,pan);},
+    // rising-pitch arcade combo callout for an unbroken kill streak (see updateKillStreak) -
+    // climbs a fixed pentatonic run rather than an unbounded frequency ramp, so it stays
+    // musical (and audible) instead of turning into an ultrasonic screech on a long streak
+    comboStinger: (streak, pan)=>{
+      const scale = [72,74,76,79,81,84,86,88,91,93];
+      const n = scale[clamp(streak-2, 0, scale.length-1)];
+      const f = NOTE(n);
+      tone(f, 0.09, "triangle", 0.11, f*1.3, pan);
+    },
     // footsteps: filtered noise rather than a tone, since a footstep should read as a soft
     // physical thump/rustle/splash rather than a musical blip - a little playback-rate jitter
     // per call keeps identical steps from sounding like a metronome
@@ -1711,6 +1881,7 @@ const Audio1 = (()=>{
     playTrack, tickMusic,
     setMusicMuted(m){ musicMuted=m; if(musicBus) musicBus.gain.value = m?0.0001:musicVolume; },
     setMusicVolume(v){ musicVolume=v; if(musicBus && !musicMuted) musicBus.gain.value = v; },
+    setIntensity(v){ intensity = clamp(v,0,1); },
   };
 })();
 // each track loops its bass and lead lines independently (in MIDI note numbers via NOTE();
@@ -2878,7 +3049,10 @@ let ambientTimer = rand(3,6); // seconds until the next quiet background one-sho
 // full-screen notice (see update()/renderFloorTransition()) before the next floor actually
 // loads, so descending reads as a deliberate transition rather than an instant, jarring cut
 let floorTransition = null;
+let dailyRun = false; // true only for the duration of a Daily Challenge run - see startDailyGame
 let camX=0, camY=0, shakeT=0, shakeMag=0;
+let punchMag=0; // camera zoom-punch amount, decays every frame in update() - see punch()
+let hitStopFrames=0; // frames of update() to skip (render() still runs) for a hit freeze-frame
 let keys = {};
 let bestFloor = 0, bestGold = 0;
 let muted = false;
@@ -3357,6 +3531,7 @@ function newPlayer(classId, animalId){
     baseMaxHp:BASE_MAX_HP,weapon:(cls&&cls.weapon)||"sword",armor:"traveler",
     classId: classId||null, animalId: ANIMALS[animalId] ? animalId : "bunny",
     animT:0,moving:false,hurtTimer:0,invuln:0,footstepTimer:0,
+    killStreak:0,streakTimer:0,
     moveDirX:1,moveDirY:0,dashT:0,dashCd:0,dashDirX:1,dashDirY:0,movePath:null,activeQuest:null,
     attackTimer:0,attackCd:0,swingAngle:0,swingHasHit:false,
     gold:0,dying:false,dieT:0,bossesDefeatedThisRun:0,cardsChosen:[],
@@ -3409,6 +3584,10 @@ function floatText(x,y,text,color){
   dmgNums.push({x,y,text,color,life:0,maxLife:0.7});
 }
 function shake(mag,time){ shakeMag=Math.max(shakeMag,mag); shakeT=Math.max(shakeT,time); }
+// a quick camera zoom-in "punch" (see render()) - unlike shake() there's no separate timer,
+// punchMag itself decays every frame (see update()), which is simpler and reads as a sharp
+// snap-in/ease-out rather than a fixed-duration hold
+function punch(mag){ punchMag = Math.max(punchMag, mag); }
 let toastTimer=0;
 function toast(msg){
   const el = document.getElementById("toast");
@@ -3536,6 +3715,131 @@ function startGame(classId){
   showOverlay(null);
   updateTouchControls();
 }
+
+/* ---------- Daily Challenge ----------
+   One attempt per UTC day (see dailyAlreadyPlayed/markDailyPlayed), same seed for everyone
+   so the same dungeon and the same day's random class/animal assignment reach every player -
+   see beginDailySeed(). Ends (finishDailyRun) via goDead/goWin/the boss-clear "bank & return"
+   button, same as any other run, but reports to a separate results screen instead of the
+   normal dead/win overlay and (when this page is running as a Claude Artifact with the db
+   capability) posts the score to that day's shared leaderboard. */
+function dailyAlreadyPlayed(){
+  try{ return localStorage.getItem("bramble_daily_date")===todayKey(); }catch(e){ return false; }
+}
+function markDailyPlayed(){
+  try{ localStorage.setItem("bramble_daily_date", todayKey()); }catch(e){}
+}
+function refreshDailyButton(){
+  const btn = document.getElementById("btnDaily");
+  const hint = document.getElementById("dailyHint");
+  if(!btn || !hint) return;
+  if(dailyAlreadyPlayed()){
+    btn.disabled = true;
+    hint.textContent = Tf("Today's challenge ({0}) complete - come back tomorrow!", todayKey());
+  } else {
+    btn.disabled = false;
+    hint.textContent = Tf("Same seed for everyone today ({0}) - one attempt", todayKey());
+  }
+}
+function startDailyGame(){
+  if(dailyAlreadyPlayed()) return;
+  markDailyPlayed();
+  refreshDailyButton();
+  dailyRun = true;
+  beginDailySeed();
+  // drawn from the now-seeded RNG, in this fixed order, so every player gets the same
+  // "today's loadout" - and a different one each day, since the seed rotates daily
+  const classId = choice(Object.keys(CLASSES));
+  const animalId = choice(Object.keys(ANIMALS));
+  Audio1.unlock();
+  player = newPlayer(classId, animalId);
+  floorNum = 1;
+  particles = []; dmgNums = []; projectiles = [];
+  spawnFloor();
+  state = "playing";
+  showOverlay(null);
+  updateTouchControls();
+  toast(Tf("Today's Challenge: {0} {1}", T(ANIMALS[animalId].name), T(CLASSES[classId].name)));
+}
+// tallies a completed (or voluntarily ended) daily run and swaps in the results overlay in
+// place of whatever normal end-of-run overlay just showed - called from goDead/goWin/bank&return
+function finishDailyRun(){
+  endDailySeed();
+  dailyRun = false;
+  state = "dailyresult";
+  const reachedFloor = Math.min(floorNum, TOTAL_FLOORS);
+  const score = reachedFloor*1000 + player.gold;
+  let best = 0;
+  try{ best = parseInt(localStorage.getItem("bramble_daily_best")||"0",10)||0; }catch(e){}
+  const isNewBest = score>best;
+  if(isNewBest){ best = score; try{ localStorage.setItem("bramble_daily_best", best); }catch(e){} }
+  const animalName = T((ANIMALS[player.animalId]||ANIMALS.bunny).name).toLowerCase();
+  document.getElementById("dailyResultMsg").textContent =
+    Tf("Your {0} reached floor {1} with {2} gold.", animalName, reachedFloor, player.gold);
+  document.getElementById("dailyScore").textContent = score;
+  document.getElementById("dailyBest").textContent = best;
+  document.getElementById("dailyNewBest").hidden = !isNewBest;
+  renderDailyLeaderboard(score, reachedFloor);
+  showOverlay("ov-daily-result");
+  updateTouchControls();
+}
+// posts to (and reads back) that day's shared leaderboard, only when this page is actually
+// running as a Claude Artifact with the db capability granted - on any other host (including
+// the plain GitHub Pages build, which has no window.claude at all) this quietly does nothing
+// beyond the personal-best comparison finishDailyRun() already showed
+async function renderDailyLeaderboard(score, reachedFloor){
+  const box = document.getElementById("dailyLeaderboard");
+  const nameRow = document.getElementById("dailyNameRow");
+  box.textContent = "";
+  nameRow.hidden = true;
+  if(typeof window.claude==="undefined" || typeof window.claude.use!=="function") return;
+  let db = null;
+  try{ db = await window.claude.use("db"); }catch(e){ db = null; }
+  if(!db) return;
+  const dateKey = todayKey();
+  const col = db.collection("leaderboard/"+dateKey+"/scores");
+  async function loadBoard(){
+    box.textContent = T("Loading leaderboard...");
+    try{
+      const snap = await col.orderBy("score","desc").limit(10).get();
+      box.textContent = "";
+      if(snap.empty){ box.textContent = T("No scores yet today - be the first!"); return; }
+      snap.docs.forEach((d,i)=>{
+        const data = d.data()||{};
+        const row = document.createElement("div");
+        row.className = "leaderboard-row";
+        const rank = document.createElement("span"); rank.className="lb-rank"; rank.textContent = "#"+(i+1);
+        const name = document.createElement("span"); name.className="lb-name"; name.textContent = String(data.name||"?").slice(0,16);
+        const sc = document.createElement("span"); sc.className="lb-score"; sc.textContent = data.score;
+        row.appendChild(rank); row.appendChild(name); row.appendChild(sc);
+        box.appendChild(row);
+      });
+    }catch(e){ box.textContent = ""; }
+  }
+  nameRow.hidden = false;
+  const nameInput = document.getElementById("dailyNameInput");
+  let savedName = "";
+  try{ savedName = localStorage.getItem("bramble_playername")||""; }catch(e){}
+  nameInput.value = savedName;
+  document.getElementById("btnDailySubmit").onclick = async ()=>{
+    const name = (nameInput.value||"").trim().slice(0,16) || "Adventurer";
+    try{ localStorage.setItem("bramble_playername", name); }catch(e){}
+    try{
+      await col.add({name, score, floor:reachedFloor, gold:player.gold, ts:Date.now()});
+      loadBoard();
+    }catch(e){}
+  };
+  loadBoard();
+}
+document.getElementById("btnDaily").addEventListener("click", startDailyGame);
+document.getElementById("btnDailyClose").addEventListener("click", ()=>{
+  showOverlay("ov-title");
+  state = "title";
+  refreshTitleStats();
+  refreshDailyButton();
+  updateTouchControls();
+});
+
 function goDead(){
   state = "dead";
   Audio1.dead();
@@ -3551,6 +3855,7 @@ function goDead(){
   document.getElementById("deadShards").textContent = earned;
   showOverlay("ov-dead");
   updateTouchControls();
+  if(dailyRun) finishDailyRun();
 }
 function goWin(){
   autoCollectItems();
@@ -3568,9 +3873,10 @@ function goWin(){
   document.getElementById("winShards").textContent = earned;
   showOverlay("ov-win");
   updateTouchControls();
+  if(dailyRun) finishDailyRun();
 }
 function showOverlay(id){
-  ["ov-title","ov-howto","ov-classselect","ov-shop","ov-quest","ov-levelup","ov-inventory","ov-gearcompare","ov-bossclear","ov-upgrades","ov-settings","ov-dead","ov-win"].forEach(k=>{
+  ["ov-title","ov-howto","ov-classselect","ov-shop","ov-quest","ov-levelup","ov-inventory","ov-gearcompare","ov-bossclear","ov-upgrades","ov-settings","ov-dead","ov-win","ov-daily-result"].forEach(k=>{
     document.getElementById(k).hidden = (k!==id);
   });
   if(id){
@@ -3674,9 +3980,13 @@ document.getElementById("btnContinueRun").addEventListener("click", ()=>{
 document.getElementById("btnBankQuit").addEventListener("click", ()=>{
   bankRun();
   clearSavedRun();
-  showOverlay("ov-title");
-  state = "title";
-  refreshTitleStats();
+  if(dailyRun){
+    finishDailyRun();
+  } else {
+    showOverlay("ov-title");
+    state = "title";
+    refreshTitleStats();
+  }
   updateTouchControls();
 });
 
@@ -3784,6 +4094,7 @@ function refreshTitleStats(){
   const resumeBtn = document.getElementById("btnResumeRun");
   resumeBtn.hidden = !saved;
   if(saved) document.getElementById("resumeFloor").textContent = saved.floorNum||1;
+  refreshDailyButton();
 }
 document.getElementById("btnResumeRun").addEventListener("click", continueRun);
 
@@ -4637,7 +4948,11 @@ function frame(now){
   const dt = Math.min(0.033, (now-last)/1000);
   last = now;
   try{
-    update(dt);
+    // hit-stop: a couple of frames of complete freeze on an impactful hit (see hitEnemy/
+    // damagePlayer) - render() still runs so the frozen moment is actually visible, not a
+    // dropped frame
+    if(hitStopFrames>0) hitStopFrames--;
+    else update(dt);
     render();
   }catch(err){
     showDebug(err);
@@ -4719,19 +5034,50 @@ function playFootstep(){
 // rather than just "music + footsteps + combat stings". Ticks alongside the music (see
 // update()) so it keeps going through menus/overlays too, and goes quiet on title/dead/win.
 function updateAmbient(dt){
-  if(state==="title" || state==="dead" || state==="win" || !biome) return;
+  if(state==="title" || state==="dead" || state==="win" || state==="dailyresult" || !biome) return;
   ambientTimer -= dt;
   if(ambientTimer<=0){
     ambientTimer = rand(4,9);
-    const pan = panFor(camX + rand(0,VIEWW));
+    const dropX = camX + rand(0,VIEWW);
+    const pan = panFor(dropX);
     if(biome.key==="forest") choice([Audio1.ambientBirdForest, Audio1.ambientRustleForest])(pan);
     else if(biome.key==="water") choice([Audio1.ambientWaveWater, Audio1.ambientDropWater])(pan);
-    else choice([Audio1.ambientDripDungeon, Audio1.ambientCrackleDungeon])(pan);
+    else {
+      const useDrip = Math.random()<0.5;
+      (useDrip ? Audio1.ambientDripDungeon : Audio1.ambientCrackleDungeon)(pan);
+      // a visible drop falling from the dark ceiling to match the drip sound - ties the
+      // ambient audio to something the player can actually see, not just hear
+      if(useDrip) particles.push({x:dropX, y:camY-4, vx:0, vy:90, grav:40, life:0, maxLife:1.6, color:"#bcd9e6", size:2});
+    }
+  }
+}
+// how hard the current fight is right now, 0..1 - the higher of "how many enemies are close"
+// and "how hot the kill streak is", smoothed frame to frame in update() before feeding
+// Audio1.setIntensity (see musicIntensity there) so it swells and eases rather than snapping
+let musicIntensity = 0;
+function musicIntensityTarget(){
+  if(!player || state!=="playing" || !Array.isArray(enemies)) return 0;
+  const nearR = 260;
+  let nearCount = 0;
+  for(const en of enemies){ if(!en.dying && dist2(en.x,en.y,player.x,player.y) < nearR*nearR) nearCount++; }
+  const fromEnemies = clamp(nearCount/5, 0, 1);
+  const fromStreak = clamp((player.killStreak||0)/6, 0, 1);
+  return Math.max(fromEnemies, fromStreak);
+}
+// kill-streak combo counter: shown/hidden here so hitEnemy() and damagePlayer() (which start
+// and break it) don't each need their own DOM-poking copy of this logic
+function updateComboBadge(){
+  const badge = document.getElementById("comboBadge");
+  if(player && player.killStreak>=2){
+    document.getElementById("comboN").textContent = "x"+player.killStreak;
+    badge.classList.add("show");
+  } else {
+    badge.classList.remove("show");
   }
 }
 function currentMusicKey(){
   if(state==="title") return "title";
-  if(state==="dead" || state==="win") return null;
+  if(state==="dead" || state==="win" || state==="dailyresult") return null;
   if(!biome) return null;
   // critical health overrides everything, including a boss fight - that's the single most
   // urgent thing happening, and the player needs the audio cue more than the mood music
@@ -4751,6 +5097,8 @@ function update(dt){
   Audio1.playTrack(currentMusicKey());
   Audio1.tickMusic();
   updateAmbient(dt);
+  musicIntensity = lerp(musicIntensity, musicIntensityTarget(), clamp(dt*3, 0, 1));
+  Audio1.setIntensity(musicIntensity);
   if(toastTimer>0){ toastTimer-=dt; if(toastTimer<=0) document.getElementById("toast").classList.remove("show"); }
   if(merchant) merchant.animT += dt;
 
@@ -4836,6 +5184,10 @@ function update(dt){
   player.animT += dt;
   if(player.hurtTimer>0) player.hurtTimer-=dt;
   if(player.invuln>0) player.invuln-=dt;
+  if(player.streakTimer>0){
+    player.streakTimer -= dt;
+    if(player.streakTimer<=0){ player.killStreak = 0; updateComboBadge(); }
+  }
   updatePlayerAttack(dt);
   updateProjectiles(dt);
 
@@ -5003,6 +5355,7 @@ function update(dt){
   if(!Number.isFinite(camX)) camX = 0;
   if(!Number.isFinite(camY)) camY = 0;
   if(shakeT>0){ shakeT-=dt; if(shakeT<=0) shakeMag=0; }
+  if(punchMag>0) punchMag = Math.max(0, punchMag - dt*6);
 
   if(player.hp<=0 && !player.dying){
     if(player.mods.secondWindCharges>0){
@@ -5194,11 +5547,14 @@ function damagePlayer(sourceX, sourceY, rawDmg, knockback, isRanged){
   if(isRanged && getArmor().hasShield) dmg = Math.max(1, Math.round(dmg*0.5));
   player.hp -= dmg;
   player.hurtTimer = 0.35; player.invuln = 0.9;
+  if(player.killStreak>0){ player.killStreak = 0; player.streakTimer = 0; updateComboBadge(); }
   const ang = Math.atan2(player.y-sourceY, player.x-sourceX);
   moveWithCollision(player, Math.cos(ang)*knockback, Math.sin(ang)*knockback);
   floatText(player.x, player.y-26, "-"+dmg, "#ff9d9d");
   burst(player.x,player.y-14,"#ff6f91",6,{maxSp:100,up:30});
   shake(knockback>18?6:4, knockback>18?0.2:0.14);
+  hitStopFrames = Math.max(hitStopFrames, 2);
+  punch(0.03);
   Audio1.hurt(panFor(sourceX));
   return dmg;
 }
@@ -5234,9 +5590,19 @@ function hitEnemy(en, dmg, angle, knockback){
   en.y = Number.isFinite(ny) ? clamp(ny, TILE, MAPH*TILE-TILE) : en.y;
   burst(en.x, en.y-14, "#fff", 5, {maxSp:100,up:36});
   floatText(en.x, en.y-26, "-"+dmg, "#ff6f91");
+  // "juice": a couple of frames of full freeze plus a tiny camera zoom-punch on every landed
+  // hit gives combat weight almost for free - bigger on a kill, bigger still on a boss kill
+  hitStopFrames = Math.max(hitStopFrames, 2);
+  punch(0.025);
   if(en.hp<=0 && !en.dying){
     en.dying = true; en.dieT=0;
     Audio1.death(panFor(en.x));
+    player.killStreak = (player.killStreak||0) + 1;
+    player.streakTimer = 3.5; // seconds of no kills before the streak resets - see update()
+    if(player.killStreak>=2) Audio1.comboStinger(player.killStreak, panFor(en.x));
+    updateComboBadge();
+    hitStopFrames = Math.max(hitStopFrames, en.type==="boss" ? 8 : 5);
+    punch(en.type==="boss" ? 0.09 : 0.05);
     const deathColor = en.type==="slime" ? COL.slime : en.type==="brute" ? "#9ab080" : en.type==="boar" ? "#8a6748" : en.type==="boss" ? BOSSES[en.bossKind].bodyColor : "#e6dcff";
     burst(en.x,en.y-14, deathColor, 14, {maxSp:160,up:60});
     shake(en.type==="boss"?10:4, en.type==="boss"?0.3:0.15);
@@ -5490,9 +5856,17 @@ function render(){
     return;
   }
 
+  // camera "punch": a brief zoom toward screen center on an impactful hit (see punch()) -
+  // applied before the normal camera translate so it zooms the whole frame, not just the world
+  if(punchMag>0.001){
+    ctx.translate(VIEWW/2, VIEWH/2);
+    ctx.scale(1+punchMag, 1+punchMag);
+    ctx.translate(-VIEWW/2, -VIEWH/2);
+  }
   ctx.translate(-camX+sx, -camY+sy);
   renderTiles();
   renderDecor();
+  renderBiomeAtmosphere();
   // Cull to what's actually on screen before building the draw list. The old flat-rect art
   // was cheap enough to just draw everything every frame; a shaded shape costs far more
   // (gradients, gloss, stroke per part), so anything off-camera has to be skipped.
@@ -5650,6 +6024,39 @@ function renderDecor(){
       ctx.fillStyle="#6b4527"; ctx.fillRect(d.x-6,d.y-3,5,4); ctx.fillRect(d.x+1,d.y-2,6,3); ctx.fillRect(d.x-2,d.y-5,4,3);
       ctx.fillStyle="#8a5a3a"; ctx.fillRect(d.x-5,d.y-4,3,2); ctx.fillRect(d.x+2,d.y-3,3,2); ctx.fillRect(d.x-1,d.y-6,2,2);
     }
+  }
+}
+// biome-specific atmospheric flourishes, drawn low-alpha under the creatures/items so they
+// tint the world without ever obscuring gameplay - forest gets soft light shafts through the
+// canopy, the shoals get a slowly drifting patch of surface light; the dungeon's atmosphere
+// comes from the ambient drip particles (see updateAmbient) instead of a per-frame overlay
+function renderBiomeAtmosphere(){
+  if(!biome) return;
+  const mw = MAPW*TILE, mh = MAPH*TILE;
+  const t = performance.now()/1000;
+  if(biome.key==="forest"){
+    ctx.save();
+    ctx.globalAlpha = 0.07;
+    ctx.fillStyle = "#fff6d0";
+    for(const bx of [mw*0.22, mw*0.55, mw*0.82]){
+      ctx.save();
+      ctx.translate(bx + Math.sin(t*0.15+bx)*14, 0);
+      ctx.rotate(0.16);
+      ctx.fillRect(-36, -60, 80, mh+120);
+      ctx.restore();
+    }
+    ctx.restore();
+  } else if(biome.key==="water"){
+    ctx.save();
+    ctx.globalAlpha = 0.07;
+    const cx = mw*0.5 + Math.sin(t*0.3)*mw*0.28;
+    const cy = mh*0.5 + Math.cos(t*0.22)*mh*0.22;
+    const g = ctx.createRadialGradient(cx,cy,0,cx,cy,Math.max(mw,mh)*0.4);
+    g.addColorStop(0, "#eafcff");
+    g.addColorStop(1, "rgba(234,252,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,mw,mh);
+    ctx.restore();
   }
 }
 // the physical wall-mounted fixture (pole + flame/firefly/glow-orb) - drawn as part of the
