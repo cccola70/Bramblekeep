@@ -1294,10 +1294,14 @@ const I18N = {
   "Settings": "設定",
   "Language": "語言",
   "Sound": "音效",
+  "Sound Effects": "音效",
   "Mute all sound": "靜音所有音效",
   "Mute": "靜音",
   "Unmute": "取消靜音",
   "Volume": "音量",
+  "Music": "音樂",
+  "Mute music": "靜音音樂",
+  "Music volume": "音樂音量",
   "Touch Controls": "觸控操作",
   "Control Size": "操作介面大小",
   "Controls": "按鍵設定",
@@ -1517,10 +1521,14 @@ const I18N = {
   "Settings": "设置",
   "Language": "语言",
   "Sound": "音效",
+  "Sound Effects": "音效",
   "Mute all sound": "静音所有音效",
   "Mute": "静音",
   "Unmute": "取消静音",
   "Volume": "音量",
+  "Music": "音乐",
+  "Mute music": "静音音乐",
+  "Music volume": "音乐音量",
   "Touch Controls": "触控操作",
   "Control Size": "操作界面大小",
   "Controls": "按键设置",
@@ -1542,6 +1550,7 @@ const choice = arr=>arr[Math.floor(Math.random()*arr.length)];
 const dist2 = (ax,ay,bx,by)=>{const dx=ax-bx,dy=ay-by; return dx*dx+dy*dy;};
 
 /* ---------- audio (tiny synth, no assets) ---------- */
+const NOTE = m => m==null ? null : 440*Math.pow(2,(m-69)/12); // MIDI note number -> Hz
 const Audio1 = (()=>{
   let ctx=null, muted=false, volume=1;
   function ensure(){ if(!ctx){ try{ ctx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return ctx; }
@@ -1560,6 +1569,65 @@ const Audio1 = (()=>{
     osc.connect(g); g.connect(c.destination);
     osc.start(t0); osc.stop(t0+dur+0.02);
   }
+
+  /* ---- background music: a tiny procedural step-sequencer, since the game ships with no
+     external assets. Notes are scheduled a fraction of a second ahead of when they actually
+     play (the standard Web Audio "lookahead" technique) using the audio context's own clock,
+     so the loop stays gapless regardless of the game's frame rate or any GC pause. ---- */
+  let musicMuted=false, musicVolume=0.5, musicBus=null;
+  let trackKey=null, track=null, stepIndex=0, nextStepTime=0;
+  const SCHEDULE_AHEAD = 0.2; // seconds of notes kept queued up at any time
+  function bus(){
+    const c = ensure(); if(!c) return null;
+    if(!musicBus){ musicBus = c.createGain(); musicBus.gain.value = musicMuted?0:musicVolume; musicBus.connect(c.destination); }
+    return musicBus;
+  }
+  function playNote(c, freq, t, dur, type, gain){
+    if(!freq) return; // a rest
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0005,gain), t+0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    osc.connect(g); g.connect(bus());
+    osc.start(t); osc.stop(t+dur+0.02);
+  }
+  function scheduleStep(c, i, t){
+    const bassNote = track.bass[i % track.bass.length];
+    playNote(c, bassNote, t, track.step*0.92, track.bassType||"triangle", track.bassGain!=null?track.bassGain:0.11);
+    const leadNote = track.lead[i % track.lead.length];
+    playNote(c, leadNote, t, track.step*0.8, track.leadType||"square", track.leadGain!=null?track.leadGain:0.05);
+  }
+  // called every frame regardless of game state - cheap when there's nothing new to queue
+  function tickMusic(){
+    if(muted || musicMuted || !track) return;
+    const c = ensure(); if(!c || c.state!=="running") return;
+    // after the tab was backgrounded (rAF paused) the audio clock kept advancing without us -
+    // catch up to "now" instead of dumping a burst of missed notes all at once
+    if(nextStepTime < c.currentTime) nextStepTime = c.currentTime;
+    while(nextStepTime < c.currentTime + SCHEDULE_AHEAD){
+      scheduleStep(c, stepIndex, nextStepTime);
+      nextStepTime += track.step;
+      stepIndex = (stepIndex+1) % track.bass.length;
+    }
+  }
+  // idempotent - called every frame with the "desired" track, only actually swaps (with a
+  // quick fade so it's not a hard cut) when the desired track differs from what's playing
+  function playTrack(key){
+    if(trackKey === key) return;
+    trackKey = key;
+    track = key ? MUSIC_TRACKS[key] : null;
+    stepIndex = 0;
+    const c = ensure();
+    nextStepTime = (c ? c.currentTime : 0) + 0.05;
+    const g = bus(); if(!c || !g) return;
+    g.gain.cancelScheduledValues(c.currentTime);
+    g.gain.setValueAtTime(g.gain.value, c.currentTime);
+    g.gain.linearRampToValueAtTime(0.0001, c.currentTime+0.25);
+    g.gain.linearRampToValueAtTime(musicMuted?0.0001:musicVolume, c.currentTime+0.6);
+  }
+
   return {
     hit: ()=>tone(220,0.09,"square",0.14,140),
     hurt: ()=>tone(140,0.16,"sawtooth",0.15,70),
@@ -1575,9 +1643,32 @@ const Audio1 = (()=>{
     boss: ()=>{tone(90,0.4,"sawtooth",0.16,60);},
     setMuted(m){ muted=m; },
     setVolume(v){ volume=v; },
-    unlock(){ ensure(); if(ctx && ctx.state==="suspended") ctx.resume(); }
+    unlock(){ ensure(); if(ctx && ctx.state==="suspended") ctx.resume(); },
+    playTrack, tickMusic,
+    setMusicMuted(m){ musicMuted=m; if(musicBus) musicBus.gain.value = m?0.0001:musicVolume; },
+    setMusicVolume(v){ musicVolume=v; if(musicBus && !musicMuted) musicBus.gain.value = v; },
   };
 })();
+// each track is a 16-step loop (bass + lead lines, in MIDI note numbers via NOTE(); null = rest)
+// - deliberately simple, hand-written progressions rather than anything generative, so each
+// biome/mood reads as an actual (tiny) piece of music rather than random notes in a scale
+const MUSIC_TRACKS = {
+  title: { step:0.30, bassType:"triangle", leadType:"triangle", bassGain:0.10, leadGain:0.06,
+    bass: [48,null,null,null, 43,null,null,null, 45,null,null,null, 41,null,null,null].map(NOTE),
+    lead: [60,null,64,null, 67,null,64,null, 69,null,67,64, 62,null,60,null].map(NOTE) },
+  dungeon: { step:0.20, bassType:"triangle", leadType:"square", bassGain:0.11, leadGain:0.05,
+    bass: [43,null,50,null, 43,null,50,null, 48,null,43,null, 50,null,50,null].map(NOTE),
+    lead: [67,69,71,null, 74,71,69,67, 71,74,76,74, 71,69,67,null].map(NOTE) },
+  forest: { step:0.16, bassType:"triangle", leadType:"triangle", bassGain:0.10, leadGain:0.055,
+    bass: [50,null,57,null, 50,null,57,null, 55,null,50,null, 57,null,57,null].map(NOTE),
+    lead: [62,64,66,69, 71,69,66,64, 66,69,71,74, 71,69,66,64].map(NOTE) },
+  water: { step:0.24, bassType:"triangle", leadType:"sine", bassGain:0.10, leadGain:0.06,
+    bass: [45,null,null,52, 45,null,null,52, 50,null,null,52, 45,null,null,null].map(NOTE),
+    lead: [57,null,61,null, 64,null,66,64, 61,null,64,null, 66,64,61,null].map(NOTE) },
+  boss: { step:0.14, bassType:"sawtooth", leadType:"sawtooth", bassGain:0.10, leadGain:0.065,
+    bass: [40,40,null,40, 47,47,null,47, 40,40,null,40, 48,null,47,null].map(NOTE),
+    lead: [64,67,69,71, 74,71,69,67, 64,67,69,74, 71,69,67,64].map(NOTE) },
+};
 
 /* ---------- pixel-part drawing engine ---------- */
 // Every creature is a list of rects: {x,y,w,h,c,group}
@@ -2623,6 +2714,8 @@ let keys = {};
 let bestFloor = 0, bestGold = 0;
 let muted = false;
 let soundVolume = 1;
+let musicMuted = false;
+let musicVolume = 0.5;
 let touchScale = 1;
 
 try{
@@ -2631,11 +2724,24 @@ try{
   muted = localStorage.getItem("bramble_muted")==="1";
   const savedVol = parseFloat(localStorage.getItem("bramble_volume"));
   if(Number.isFinite(savedVol)) soundVolume = clamp(savedVol, 0, 1);
+  musicMuted = localStorage.getItem("bramble_musicMuted")==="1";
+  const savedMusicVol = parseFloat(localStorage.getItem("bramble_musicVolume"));
+  if(Number.isFinite(savedMusicVol)) musicVolume = clamp(savedMusicVol, 0, 1);
   const savedScale = parseFloat(localStorage.getItem("bramble_touchscale"));
   if(Number.isFinite(savedScale)) touchScale = clamp(savedScale, 0.8, 1.4);
 }catch(e){}
 Audio1.setMuted(muted);
 Audio1.setVolume(soundVolume);
+Audio1.setMusicMuted(musicMuted);
+Audio1.setMusicVolume(musicVolume);
+// browsers block audio until the very first user gesture on the page - startGame()/continueRun()
+// already unlock for their own SFX, but that's too late for title-screen music, so also unlock
+// on literally the first click/keypress anywhere (e.g. clicking "How to Play" or Settings first)
+(function(){
+  const unlockOnce = ()=>{ Audio1.unlock(); window.removeEventListener("pointerdown", unlockOnce); window.removeEventListener("keydown", unlockOnce); };
+  window.addEventListener("pointerdown", unlockOnce, {once:true});
+  window.addEventListener("keydown", unlockOnce, {once:true});
+})();
 
 /* ---------- persistent meta-progression (survives death, saved to localStorage) ---------- */
 let meta = { shards:0, upgrades:{} };
@@ -3636,7 +3742,7 @@ function buildSettingsOverlay(){
   // -- sound --
   const soundHeading = document.createElement("div");
   soundHeading.className = "inv-heading";
-  soundHeading.textContent = T("Sound");
+  soundHeading.textContent = T("Sound Effects");
   wrap.appendChild(soundHeading);
   const muteBtn = document.createElement("button");
   muteBtn.className = "keybind-change";
@@ -3650,6 +3756,31 @@ function buildSettingsOverlay(){
       Audio1.setVolume(soundVolume);
       try{ localStorage.setItem("bramble_volume", soundVolume); }catch(e){}
       return Math.round(soundVolume*100)+"%";
+    }
+  )));
+
+  // -- music --
+  const musicHeading = document.createElement("div");
+  musicHeading.className = "inv-heading";
+  musicHeading.textContent = T("Music");
+  wrap.appendChild(musicHeading);
+  const musicMuteBtn = document.createElement("button");
+  musicMuteBtn.className = "keybind-change";
+  musicMuteBtn.textContent = musicMuted ? T("Unmute") : T("Mute");
+  musicMuteBtn.addEventListener("click", ()=>{
+    musicMuted = !musicMuted;
+    Audio1.setMusicMuted(musicMuted);
+    try{ localStorage.setItem("bramble_musicMuted", musicMuted?"1":"0"); }catch(e){}
+    buildSettingsOverlay();
+  });
+  wrap.appendChild(settingsRow(T("Mute music"), musicMuteBtn));
+  wrap.appendChild(settingsRow(T("Music volume"), settingsSlider(
+    "musicVolumeSlider", 0, 100, 5, Math.round(musicVolume*100), Math.round(musicVolume*100)+"%",
+    v=>{
+      musicVolume = clamp(v/100, 0, 1);
+      Audio1.setMusicVolume(musicVolume);
+      try{ localStorage.setItem("bramble_musicVolume", musicVolume); }catch(e){}
+      return Math.round(musicVolume*100)+"%";
     }
   )));
 
@@ -4395,7 +4526,19 @@ function triggerDash(dirX, dirY){
   burst(player.x, player.y, "#fff", 10, {maxSp:60,up:10});
   Audio1.upgrade();
 }
+// which background loop should be playing right now, if any - kept independent of the many
+// overlay states (paused/shop/inventory/levelup/quest/bossclear/upgrades) so opening a menu
+// mid-run doesn't cut the music; only the title screen and the dead/win screens go silent
+function currentMusicKey(){
+  if(state==="title") return "title";
+  if(state==="dead" || state==="win") return null;
+  if(!biome) return null;
+  const bossAlive = enemies && enemies.some(en=>en.type==="boss" && !en.dying);
+  return bossAlive ? "boss" : biome.key;
+}
 function update(dt){
+  Audio1.playTrack(currentMusicKey());
+  Audio1.tickMusic();
   if(toastTimer>0){ toastTimer-=dt; if(toastTimer<=0) document.getElementById("toast").classList.remove("show"); }
   if(merchant) merchant.animT += dt;
 
