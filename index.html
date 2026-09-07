@@ -1649,25 +1649,48 @@ const Audio1 = (()=>{
     setMusicVolume(v){ musicVolume=v; if(musicBus && !musicMuted) musicBus.gain.value = v; },
   };
 })();
-// each track is a 16-step loop (bass + lead lines, in MIDI note numbers via NOTE(); null = rest)
-// - deliberately simple, hand-written progressions rather than anything generative, so each
-// biome/mood reads as an actual (tiny) piece of music rather than random notes in a scale
+// each track loops its bass and lead lines independently (in MIDI note numbers via NOTE();
+// null = rest) via i % array.length, so a short bass ostinato can repeat underneath a longer
+// lead line without needing to match lengths. The lead lines below are two 16-step phrases
+// (A then B) back to back rather than one riff repeated forever - a "verse" and a "chorus" -
+// so each loop takes twice as long to actually repeat and reads as a real tune, not a tape loop.
 const MUSIC_TRACKS = {
   title: { step:0.30, bassType:"triangle", leadType:"triangle", bassGain:0.10, leadGain:0.06,
     bass: [48,null,null,null, 43,null,null,null, 45,null,null,null, 41,null,null,null].map(NOTE),
-    lead: [60,null,64,null, 67,null,64,null, 69,null,67,64, 62,null,60,null].map(NOTE) },
+    lead: [
+      60,null,64,null, 67,null,64,null, 69,null,67,64, 62,null,60,null, // A
+      null,60,null,62, 64,null,67,null, 69,67,64,null, 62,60,null,null, // B
+    ].map(NOTE) },
   dungeon: { step:0.20, bassType:"triangle", leadType:"square", bassGain:0.11, leadGain:0.05,
     bass: [43,null,50,null, 43,null,50,null, 48,null,43,null, 50,null,50,null].map(NOTE),
-    lead: [67,69,71,null, 74,71,69,67, 71,74,76,74, 71,69,67,null].map(NOTE) },
+    lead: [
+      67,69,71,null, 74,71,69,67, 71,74,76,74, 71,69,67,null, // A
+      null,67,69,null, 71,null,74,71, 76,74,71,69, 67,null,69,null, // B
+    ].map(NOTE) },
   forest: { step:0.16, bassType:"triangle", leadType:"triangle", bassGain:0.10, leadGain:0.055,
     bass: [50,null,57,null, 50,null,57,null, 55,null,50,null, 57,null,57,null].map(NOTE),
-    lead: [62,64,66,69, 71,69,66,64, 66,69,71,74, 71,69,66,64].map(NOTE) },
+    lead: [
+      62,64,66,69, 71,69,66,64, 66,69,71,74, 71,69,66,64, // A
+      74,null,69,null, 66,71,69,66, 64,66,69,71, 74,71,69,66, // B
+    ].map(NOTE) },
   water: { step:0.24, bassType:"triangle", leadType:"sine", bassGain:0.10, leadGain:0.06,
     bass: [45,null,null,52, 45,null,null,52, 50,null,null,52, 45,null,null,null].map(NOTE),
-    lead: [57,null,61,null, 64,null,66,64, 61,null,64,null, 66,64,61,null].map(NOTE) },
+    lead: [
+      57,null,61,null, 64,null,66,64, 61,null,64,null, 66,64,61,null, // A
+      null,64,null,66, 69,null,66,64, null,61,null,64, 66,null,64,61, // B
+    ].map(NOTE) },
   boss: { step:0.14, bassType:"sawtooth", leadType:"sawtooth", bassGain:0.10, leadGain:0.065,
     bass: [40,40,null,40, 47,47,null,47, 40,40,null,40, 48,null,47,null].map(NOTE),
-    lead: [64,67,69,71, 74,71,69,67, 64,67,69,74, 71,69,67,64].map(NOTE) },
+    lead: [
+      64,67,69,71, 74,71,69,67, 64,67,69,74, 71,69,67,64, // A
+      74,71,74,71, 67,69,71,74, 76,74,71,69, 67,64,67,64, // B, more frantic
+    ].map(NOTE) },
+  // fast, alarming loop for critical health (see currentMusicKey) - a low pulsing "heartbeat"
+  // bass under a rapid semitone trill, deliberately dissonant and short so it reads as urgent
+  // rather than musical, the same way a real game's low-HP beep is meant to grate a little
+  lowhp: { step:0.10, bassType:"square", leadType:"sawtooth", bassGain:0.13, leadGain:0.05,
+    bass: [40,40,null,null, 40,40,null,null, 38,38,null,null, 38,38,null,null].map(NOTE),
+    lead: [74,75,74,75, 74,75,74,75, 74,75,74,75, 74,75,74,75].map(NOTE) },
 };
 
 /* ---------- pixel-part drawing engine ---------- */
@@ -4533,6 +4556,9 @@ function currentMusicKey(){
   if(state==="title") return "title";
   if(state==="dead" || state==="win") return null;
   if(!biome) return null;
+  // critical health overrides everything, including a boss fight - that's the single most
+  // urgent thing happening, and the player needs the audio cue more than the mood music
+  if(player && player.hp>0 && player.hp<=2) return "lowhp";
   const bossAlive = enemies && enemies.some(en=>en.type==="boss" && !en.dying);
   return bossAlive ? "boss" : biome.key;
 }
