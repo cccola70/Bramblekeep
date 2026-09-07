@@ -1554,7 +1554,17 @@ const NOTE = m => m==null ? null : 440*Math.pow(2,(m-69)/12); // MIDI note numbe
 const Audio1 = (()=>{
   let ctx=null, muted=false, volume=1;
   function ensure(){ if(!ctx){ try{ ctx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return ctx; }
-  function tone(freq, dur, type, gain, glideTo){
+  // routes a sound's gain node to the output, through a stereo panner when a pan value is
+  // given (and the browser supports one - it's near-universal, but this fails safely on
+  // whatever doesn't) so a sound can be heard coming from its actual side of the screen
+  function output(g, c, pan){
+    if(pan && c.createStereoPanner){
+      const p = c.createStereoPanner();
+      p.pan.value = clamp(pan,-1,1);
+      g.connect(p); p.connect(c.destination);
+    } else g.connect(c.destination);
+  }
+  function tone(freq, dur, type, gain, glideTo, pan){
     if(muted || volume<=0) return;
     const c = ensure(); if(!c) return;
     const t0 = c.currentTime;
@@ -1566,7 +1576,7 @@ const Audio1 = (()=>{
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime((gain||0.16)*volume, t0+0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
-    osc.connect(g); g.connect(c.destination);
+    osc.connect(g); output(g, c, pan);
     osc.start(t0); osc.stop(t0+dur+0.02);
   }
 
@@ -1574,7 +1584,7 @@ const Audio1 = (()=>{
   // textured (non-tonal) sound - built once and reused, since generating white noise is the
   // only way to get something that doesn't read as a musical "blip" out of an oscillator
   let noiseBuffer = null;
-  function noiseBurst(dur, gain, freq, filterType, rate){
+  function noiseBurst(dur, gain, freq, filterType, rate, pan){
     if(muted || volume<=0) return;
     const c = ensure(); if(!c) return;
     if(!noiseBuffer){
@@ -1593,7 +1603,7 @@ const Audio1 = (()=>{
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(Math.max(0.001,gain*volume), t0+0.008);
     g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
-    src.connect(filt); filt.connect(g); g.connect(c.destination);
+    src.connect(filt); filt.connect(g); output(g, c, pan);
     src.start(t0); src.stop(t0+dur+0.02);
   }
 
@@ -1656,18 +1666,20 @@ const Audio1 = (()=>{
   }
 
   return {
-    hit: ()=>tone(220,0.09,"square",0.14,140),
-    hurt: ()=>tone(140,0.16,"sawtooth",0.15,70),
-    death: ()=>{tone(300,0.12,"square",0.13,90); setTimeout(()=>tone(180,0.18,"square",0.1,60),70);},
-    pickup: ()=>{tone(520,0.07,"triangle",0.13,780); setTimeout(()=>tone(780,0.08,"triangle",0.12),60);},
-    gold: ()=>tone(900,0.06,"triangle",0.1,1200),
-    xp: ()=>tone(660,0.05,"sine",0.09,880),
+    // these six take an optional `pan` (-1 left .. 1 right, from panFor() at the call site) so
+    // combat/pickup feedback comes from the actual side of the screen it happened on
+    hit: (pan)=>tone(220,0.09,"square",0.14,140,pan),
+    hurt: (pan)=>tone(140,0.16,"sawtooth",0.15,70,pan),
+    death: (pan)=>{tone(300,0.12,"square",0.13,90,pan); setTimeout(()=>tone(180,0.18,"square",0.1,60,pan),70);},
+    pickup: (pan)=>{tone(520,0.07,"triangle",0.13,780,pan); setTimeout(()=>tone(780,0.08,"triangle",0.12,undefined,pan),60);},
+    gold: (pan)=>tone(900,0.06,"triangle",0.1,1200,pan),
+    xp: (pan)=>tone(660,0.05,"sine",0.09,880,pan),
     levelup: ()=>{[440,554,660,880,1108].forEach((f,i)=>setTimeout(()=>tone(f,0.14,"triangle",0.14),i*60));},
     stairs: ()=>{tone(440,0.1,"triangle",0.12,660); setTimeout(()=>tone(660,0.1,"triangle",0.12,880),90); setTimeout(()=>tone(880,0.16,"triangle",0.12,1320),180);},
     upgrade: ()=>{[440,554,660,880].forEach((f,i)=>setTimeout(()=>tone(f,0.12,"triangle",0.13),i*70));},
     dead: ()=>{[300,260,220,160].forEach((f,i)=>setTimeout(()=>tone(f,0.22,"sawtooth",0.12),i*140));},
     win: ()=>{[523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,0.2,"triangle",0.14),i*130));},
-    boss: ()=>{tone(90,0.4,"sawtooth",0.16,60);},
+    boss: (pan)=>{tone(90,0.4,"sawtooth",0.16,60,pan);},
     // footsteps: filtered noise rather than a tone, since a footstep should read as a soft
     // physical thump/rustle/splash rather than a musical blip - a little playback-rate jitter
     // per call keeps identical steps from sounding like a metronome
@@ -1677,6 +1689,15 @@ const Audio1 = (()=>{
       noiseBurst(0.14, 0.10, 700, "lowpass", 0.8+Math.random()*0.3);
       tone(850+Math.random()*350, 0.06, "sine", 0.045, 480);
     },
+    // ambient one-shots (see playAmbientOneShot): quiet, sparse, positional background texture
+    // under the music - two variants per biome, picked at random, so the "living world" layer
+    // doesn't itself become a repeating loop
+    ambientDripDungeon: (pan)=>tone(1500+Math.random()*500, 0.14, "sine", 0.03, 800, pan),
+    ambientCrackleDungeon: (pan)=>noiseBurst(0.1, 0.035, 3000, "highpass", 1, pan),
+    ambientBirdForest: (pan)=>{ tone(1800+Math.random()*400,0.05,"sine",0.03,2200,pan); setTimeout(()=>tone(2000+Math.random()*400,0.05,"sine",0.028,1600,pan),90); },
+    ambientRustleForest: (pan)=>noiseBurst(0.35, 0.025, 1800, "bandpass", 1, pan),
+    ambientWaveWater: (pan)=>noiseBurst(0.6, 0.035, 500, "lowpass", 0.9+Math.random()*0.2, pan),
+    ambientDropWater: (pan)=>tone(700+Math.random()*200, 0.18, "sine", 0.03, 300, pan),
     setMuted(m){ muted=m; },
     setVolume(v){ volume=v; },
     unlock(){ ensure(); if(ctx && ctx.state==="suspended") ctx.resume(); },
@@ -2845,6 +2866,7 @@ let questNpc = null;
 let pendingQuestNpcId = null;
 let biome = BIOMES[0];
 let bossWaveTimer = 0; // seconds since the last boss-fight reinforcement wave (see spawnBossWave)
+let ambientTimer = rand(3,6); // seconds until the next quiet background one-shot (see updateAmbient)
 // set the instant the player steps on the stairs; holds gameplay for a brief beat with a
 // full-screen notice (see update()/renderFloorTransition()) before the next floor actually
 // loads, so descending reads as a deliberate transition rather than an instant, jarring cut
@@ -3277,7 +3299,7 @@ function spawnBossFloor(){
   enemies.push(makeEnemy(choice(["slime","bat"]), cx+90, (r.y+r.h/2)*TILE));
 
   toast(Tf("{0} awakens!", T(BOSSES[biome.bossKind].name)));
-  Audio1.boss();
+  Audio1.boss(panFor(cx));
   saveRun();
 }
 // every BOSS_WAVE_INTERVAL seconds of an ongoing boss fight, a fresh wave of ordinary enemies
@@ -4669,6 +4691,13 @@ function triggerDash(dirX, dirY){
 // which background loop should be playing right now, if any - kept independent of the many
 // overlay states (paused/shop/inventory/levelup/quest/bossclear/upgrades) so opening a menu
 // mid-run doesn't cut the music; only the title screen and the dead/win screens go silent
+// stereo position (-1 left .. 1 right) for a sound happening at world x, based on where that
+// falls within the current camera view - so combat/pickup feedback comes from the actual side
+// of the screen it happened on instead of dead center every time
+function panFor(x){
+  if(!Number.isFinite(x) || !VIEWW) return 0;
+  return clamp((x - camX - VIEWW/2) / (VIEWW/2), -1, 1);
+}
 // picks the right footstep texture for whatever ground the player is currently walking on -
 // only called while actually walking (see the movement block in update()), not during a dash
 function playFootstep(){
@@ -4676,6 +4705,22 @@ function playFootstep(){
   if(biome.key==="forest") Audio1.stepGrass();
   else if(biome.key==="water") Audio1.stepWater();
   else Audio1.stepDirt();
+}
+// a quiet, sparse background layer under the music - a distant drip/crackle in the dungeon,
+// a bird/leaf-rustle in the forest, a wave/drip in the shoals - picked from a random point
+// across the current view (positional via panFor) so the world feels alive between fights
+// rather than just "music + footsteps + combat stings". Ticks alongside the music (see
+// update()) so it keeps going through menus/overlays too, and goes quiet on title/dead/win.
+function updateAmbient(dt){
+  if(state==="title" || state==="dead" || state==="win" || !biome) return;
+  ambientTimer -= dt;
+  if(ambientTimer<=0){
+    ambientTimer = rand(4,9);
+    const pan = panFor(camX + rand(0,VIEWW));
+    if(biome.key==="forest") choice([Audio1.ambientBirdForest, Audio1.ambientRustleForest])(pan);
+    else if(biome.key==="water") choice([Audio1.ambientWaveWater, Audio1.ambientDropWater])(pan);
+    else choice([Audio1.ambientDripDungeon, Audio1.ambientCrackleDungeon])(pan);
+  }
 }
 function currentMusicKey(){
   if(state==="title") return "title";
@@ -4698,6 +4743,7 @@ function currentMusicKey(){
 function update(dt){
   Audio1.playTrack(currentMusicKey());
   Audio1.tickMusic();
+  updateAmbient(dt);
   if(toastTimer>0){ toastTimer-=dt; if(toastTimer<=0) document.getElementById("toast").classList.remove("show"); }
   if(merchant) merchant.animT += dt;
 
@@ -5146,7 +5192,7 @@ function damagePlayer(sourceX, sourceY, rawDmg, knockback, isRanged){
   floatText(player.x, player.y-26, "-"+dmg, "#ff9d9d");
   burst(player.x,player.y-14,"#ff6f91",6,{maxSp:100,up:30});
   shake(knockback>18?6:4, knockback>18?0.2:0.14);
-  Audio1.hurt();
+  Audio1.hurt(panFor(sourceX));
   return dmg;
 }
 function handleContact(en){
@@ -5183,7 +5229,7 @@ function hitEnemy(en, dmg, angle, knockback){
   floatText(en.x, en.y-26, "-"+dmg, "#ff6f91");
   if(en.hp<=0 && !en.dying){
     en.dying = true; en.dieT=0;
-    Audio1.death();
+    Audio1.death(panFor(en.x));
     const deathColor = en.type==="slime" ? COL.slime : en.type==="brute" ? "#9ab080" : en.type==="boar" ? "#8a6748" : en.type==="boss" ? BOSSES[en.bossKind].bodyColor : "#e6dcff";
     burst(en.x,en.y-14, deathColor, 14, {maxSp:160,up:60});
     shake(en.type==="boss"?10:4, en.type==="boss"?0.3:0.15);
@@ -5250,7 +5296,7 @@ function applySwing(wpn){
     spawnProjectile(wpn);
     return;
   }
-  let hitCount = 0;
+  let hitCount = 0, firstHitX = null;
   for(const en of enemies){
     if(en.dying) continue;
     const dx=en.x-player.x, dy=en.y-player.y;
@@ -5258,6 +5304,7 @@ function applySwing(wpn){
     if(dist > wpn.range+en.radius) continue;
     const ang = Math.atan2(dy,dx);
     if(Math.abs(angleDiff(ang, player.swingAngle)) > wpn.arc/2) continue;
+    if(firstHitX==null) firstHitX = en.x;
     hitEnemy(en, wpn.dmg, ang, wpn.knockback);
     if(wpn.stun) en.cooldown = Math.max(en.cooldown, wpn.stun);
     if(player.mods.doubleHitChance>0 && Math.random()<player.mods.doubleHitChance && !en.dying){
@@ -5270,7 +5317,7 @@ function applySwing(wpn){
     hitCount++;
   }
   if(hitCount>0){
-    Audio1.hit();
+    Audio1.hit(panFor(firstHitX));
     shake(wpn.knockback>18?6:3, wpn.knockback>18?0.18:0.12);
   }
 }
@@ -5361,11 +5408,11 @@ function pickup(it){
   if(it.type==="potion"){
     player.hp = Math.min(player.maxhp, player.hp+2);
     toast(T("Found a wildberry potion! +2 HP"));
-    Audio1.pickup();
+    Audio1.pickup(panFor(it.x));
     burst(it.x,it.y-10, COL.moss, 10, {maxSp:80,up:40});
   } else if(it.type==="gold"){
     player.gold += Math.round(it.amount*player.mods.goldMult);
-    Audio1.gold();
+    Audio1.gold(panFor(it.x));
     burst(it.x,it.y-10, COL.amber, 6, {maxSp:70,up:30});
   } else if(it.type==="weaponPickup"){
     const oldWeapon = player.weapon;
@@ -5381,7 +5428,7 @@ function pickup(it){
       items.push({type:"weaponPickup", weapon:oldWeapon, x:it.x, y:it.y, t:0, armed:false});
     }
   } else if(it.type==="gem"){
-    Audio1.xp();
+    Audio1.xp(panFor(it.x));
     floatText(it.x, it.y-20, "+"+it.value+" XP", "#b19bff");
     burst(it.x,it.y-10, "#b19bff", 8, {maxSp:70,up:30});
     gainXP(it.value);
