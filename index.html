@@ -2614,6 +2614,10 @@ let questNpc = null;
 let pendingQuestNpcId = null;
 let biome = BIOMES[0];
 let bossWaveTimer = 0; // seconds since the last boss-fight reinforcement wave (see spawnBossWave)
+// set the instant the player steps on the stairs; holds gameplay for a brief beat with a
+// full-screen notice (see update()/renderFloorTransition()) before the next floor actually
+// loads, so descending reads as a deliberate transition rather than an instant, jarring cut
+let floorTransition = null;
 let camX=0, camY=0, shakeT=0, shakeMag=0;
 let keys = {};
 let bestFloor = 0, bestGold = 0;
@@ -4344,6 +4348,19 @@ requestAnimationFrame(frame);
 
 function moveWithCollision(ent, dx, dy){
   if(!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+  // any mover can cover several pixels in one call (dash, knockback, a lunging boss, or just a
+  // slow frame on a loaded tab) - resolving that in one big jump can land squarely in a corner
+  // pocket where both axes read blocked at once, snagging movement instead of sliding along the
+  // wall the way a tiny step would. Splitting a large move into ~4px sub-steps (same total
+  // distance) lets the per-axis check below resolve gradually every time, so nothing - player,
+  // dash, enemies, knockback - ever catches on a wall or corner.
+  const dist = Math.hypot(dx,dy);
+  if(dist>4){
+    const steps = Math.ceil(dist/4);
+    const sx = dx/steps, sy = dy/steps;
+    for(let i=0;i<steps;i++) moveWithCollision(ent, sx, sy);
+    return;
+  }
   const r = ent.radius;
   if(dx!==0){
     const nx = ent.x + dx;
@@ -4381,6 +4398,18 @@ function triggerDash(dirX, dirY){
 function update(dt){
   if(toastTimer>0){ toastTimer-=dt; if(toastTimer<=0) document.getElementById("toast").classList.remove("show"); }
   if(merchant) merchant.animT += dt;
+
+  if(floorTransition){
+    // freeze the whole floor on this last frame - no player/enemy/projectile updates - while
+    // the notice holds, then hand off to the actual floor change once it elapses
+    floorTransition.t += dt;
+    updateParticles(dt);
+    if(floorTransition.t>=floorTransition.dur){
+      floorTransition = null;
+      nextFloor();
+    }
+    return;
+  }
 
   if(state!=="playing"){
     // idle title-screen animation for player preview
@@ -4426,16 +4455,9 @@ function update(dt){
     player.dashT -= dt;
     const dashSpeed = DASH_DISTANCE/DASH_DURATION;
     const dashStepX = player.dashDirX*dashSpeed*dt, dashStepY = player.dashDirY*dashSpeed*dt;
-    // a dash covers several pixels per frame - way more than a normal step - so resolving it
-    // in one big diagonal jump can land squarely in a corner pocket where neither axis alone
-    // has room, freezing the player for the rest of the dash instead of sliding along the
-    // wall. Splitting it into small sub-steps (same total distance) lets moveWithCollision's
-    // per-axis check resolve each tiny bit of the approach on its own, so the player hugs and
-    // slides along whatever wall/corner they meet, the same way normal movement already does.
-    const dashSteps = Math.max(1, Math.ceil(Math.hypot(dashStepX,dashStepY)/4));
-    for(let i=0;i<dashSteps;i++){
-      moveWithCollision(player, dashStepX/dashSteps, dashStepY/dashSteps);
-    }
+    // moveWithCollision itself sub-steps any large move, so a fast dash still slides along
+    // whatever wall/corner it meets instead of snagging on it.
+    moveWithCollision(player, dashStepX, dashStepY);
     player.moving = true;
     if(player.dashDirX!==0) player.facing = player.dashDirX>0?1:-1;
     player.facingDir = computeFacingDir(player.dashDirX, player.dashDirY);
@@ -4577,8 +4599,13 @@ function update(dt){
 
   // stairs (guard state==="playing": a gem picked up this same frame may have
   // already opened the level-up overlay, and stairs/shop must not clobber it)
-  if(state==="playing" && !player.dying && tileAt(player.x,player.y)===STAIRS){
-    nextFloor();
+  if(state==="playing" && !player.dying && !floorTransition && tileAt(player.x,player.y)===STAIRS){
+    const isFinal = floorNum>=TOTAL_FLOORS;
+    floorTransition = {
+      t:0, dur:0.75,
+      label: isFinal ? T("Leaving the dungeon...") : Tf("Descending to Floor {0}...", floorNum+1),
+    };
+    Audio1.stairs();
   }
 
   // merchant (approach to browse; must step away before re-triggering)
@@ -5067,7 +5094,6 @@ function nextFloor(){
   if(player.activeQuest && player.activeQuest.type==="survive" && player.activeQuest.floorNum===floorNum){
     completeQuest();
   }
-  Audio1.stairs();
   floorNum++;
   if(player.activeQuest && player.activeQuest.floorNum!==floorNum) player.activeQuest = null;
   if(floorNum>TOTAL_FLOORS){ goWin(); return; }
@@ -5142,6 +5168,24 @@ function render(){
 
   renderVignette();
   renderHUDCanvas();
+  if(floorTransition) renderFloorTransition();
+}
+
+function renderFloorTransition(){
+  // quick fade in, hold on the label, fade out right as the next floor takes over
+  const p = clamp(floorTransition.t/floorTransition.dur, 0, 1);
+  const alpha = p<0.35 ? p/0.35 : (p>0.85 ? (1-p)/0.15 : 1);
+  ctx.save();
+  ctx.globalAlpha = alpha*0.88;
+  ctx.fillStyle = "#0b0710";
+  ctx.fillRect(0,0,VIEWW,VIEWH);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "#f5e9d0";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "bold 20px 'Silkscreen', monospace";
+  ctx.fillText(floorTransition.label, VIEWW/2, VIEWH/2);
+  ctx.restore();
 }
 
 function renderTitleScene(){
